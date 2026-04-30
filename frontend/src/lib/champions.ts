@@ -1,8 +1,3 @@
-/**
- * Client-side champion definitions mirroring ChampionTypes.sol.
- * Stats are informational only — the contract is the source of truth.
- */
-
 export enum ChampionClass {
   CURUPIRA   = 0,
   IARA       = 1,
@@ -19,14 +14,13 @@ export interface ChampionDef {
   lore:        string;
   abilityName: string;
   abilityDesc: string;
-  // base stats (mirrors ChampionTypes.getBaseStats)
   maxHp:       number;
   attack:      number;
   defense:     number;
   speed:       number;
-  critPct:     number;  // %
-  dodgePct:    number;  // %
-  color:       string;  // Tailwind gradient class
+  critPct:     number;
+  dodgePct:    number;
+  color:       string;
   borderColor: string;
 }
 
@@ -36,9 +30,9 @@ export const CHAMPIONS: ChampionDef[] = [
     name:        "Curupira",
     role:        "Tank",
     emoji:       "🦶",
-    lore:        "Guardião da floresta com pés ao contrário que confunde inimigos.",
-    abilityName: "Pés Invertidos",
-    abilityDesc: "+60% de defesa por 2 turnos e enfraquece o ataque do inimigo em 20%.",
+    lore:        "Guardian of the Amazon forest with backwards feet that confuse and trap all who dare enter his domain.",
+    abilityName: "Inverted Feet",
+    abilityDesc: "+60% defense for 2 turns and weakens enemy attack by 20%.",
     maxHp:       200,
     attack:      22,
     defense:     45,
@@ -53,9 +47,9 @@ export const CHAMPIONS: ChampionDef[] = [
     name:        "Iara",
     role:        "Support",
     emoji:       "🧜‍♀️",
-    lore:        "Sereia dos rios amazônicos cujo canto encanta e paralisa.",
-    abilityName: "Canto Sedutor",
-    abilityDesc: "Atordoa o inimigo por 1 turno e recupera 45 HP.",
+    lore:        "River mermaid of the Amazon whose enchanting song lures warriors to their doom — or saves her allies.",
+    abilityName: "Seductive Song",
+    abilityDesc: "Stuns the enemy for 1 turn and restores 45 HP.",
     maxHp:       160,
     attack:      25,
     defense:     30,
@@ -70,9 +64,9 @@ export const CHAMPIONS: ChampionDef[] = [
     name:        "Boitatá",
     role:        "DPS / DoT",
     emoji:       "🐍",
-    lore:        "Serpente de fogo que protege os campos e queima tudo que ameaça.",
-    abilityName: "Olhar de Brasa",
-    abilityDesc: "Aplica queimadura: 18 de dano por turno durante 4 turnos (+20 instantâneo).",
+    lore:        "A great fire serpent that protects the fields, burning with the eyes of a thousand souls it has consumed.",
+    abilityName: "Ember Gaze",
+    abilityDesc: "Applies burn: 18 fire damage per turn for 4 turns (+20 instant damage).",
     maxHp:       150,
     attack:      40,
     defense:     20,
@@ -87,9 +81,9 @@ export const CHAMPIONS: ChampionDef[] = [
     name:        "Anhangá",
     role:        "Assassin",
     emoji:       "💀",
-    lore:        "Espírito errante e vingativo que persegue alvos frágeis nas sombras.",
-    abilityName: "Caçada Sombria",
-    abilityDesc: "Ataque ×2.5 ignorando 50% da defesa do inimigo.",
+    lore:        "A vengeful wandering spirit that stalks weak prey in the shadows, striking with terrifying precision.",
+    abilityName: "Shadow Hunt",
+    abilityDesc: "Deals ×2.5 damage ignoring 50% of the enemy's defense.",
     maxHp:       120,
     attack:      55,
     defense:     15,
@@ -104,9 +98,9 @@ export const CHAMPIONS: ChampionDef[] = [
     name:        "Tupã",
     role:        "Mage",
     emoji:       "⚡",
-    lore:        "Deus do trovão tupi-guarani, senhor dos raios e das tempestades.",
-    abilityName: "Tempestade Elétrica",
-    abilityDesc: "65 de dano elétrico + atordoa o inimigo por 1 turno.",
+    lore:        "The supreme god of thunder in Tupi-Guarani mythology. Master of storms and lightning that shakes the heavens.",
+    abilityName: "Lightning Storm",
+    abilityDesc: "Deals 65 electric damage and stuns the enemy for 1 turn.",
     maxHp:       140,
     attack:      45,
     defense:     18,
@@ -122,7 +116,6 @@ export function getChampion(class_: ChampionClass): ChampionDef {
   return CHAMPIONS[class_];
 }
 
-/** Stat bar width percentage (0-100) relative to max in class */
 export function statPct(value: number, max: number): number {
   return Math.min(100, Math.round((value / max) * 100));
 }

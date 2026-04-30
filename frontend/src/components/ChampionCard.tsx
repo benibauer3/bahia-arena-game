@@ -1,20 +1,23 @@
 import { type ChampionDef, statPct } from "@/lib/champions";
+import { ChampionArt } from "./ChampionArt";
 
 interface Props {
   champion:  ChampionDef;
   selected?: boolean;
-  locked?:   boolean;   // in battle or not deposited
+  locked?:   boolean;
   onClick?:  () => void;
   size?:     "sm" | "md" | "lg";
 }
 
 function StatBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
-  const pct = statPct(value, max);
   return (
     <div className="flex items-center gap-2">
       <span className="text-arena-muted text-xs w-8 shrink-0">{label}</span>
       <div className="flex-1 h-1.5 bg-arena-border rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${color}`}
+          style={{ width: `${statPct(value, max)}%` }}
+        />
       </div>
       <span className="text-xs font-semibold w-7 text-right">{value}</span>
     </div>
@@ -38,17 +41,19 @@ export default function ChampionCard({ champion: c, selected, locked, onClick, s
       `}
     >
       {/* Role badge */}
-      <div className={`absolute top-2 right-2 px-1.5 py-0.5 rounded-full text-xs font-semibold
-        bg-arena-bg/60 backdrop-blur-sm text-arena-muted`}>
+      <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-full text-xs font-semibold bg-arena-bg/60 backdrop-blur-sm text-arena-muted">
         {c.role}
       </div>
 
-      {/* Avatar */}
-      <div className={`
-        flex items-center justify-center rounded-xl bg-arena-bg/40 mx-auto mb-2
-        ${isLg ? "w-20 h-20 text-5xl" : isSm ? "w-12 h-12 text-3xl" : "w-16 h-16 text-4xl"}
-      `}>
-        <span className="animate-float">{c.emoji}</span>
+      {/* Champion Art */}
+      <div className={`flex items-center justify-center mx-auto mb-2
+        ${isLg ? "w-28 h-28" : isSm ? "w-14 h-14" : "w-20 h-20"}`}
+      >
+        <ChampionArt
+          class_={c.class}
+          size={isLg ? 112 : isSm ? 56 : 80}
+          animated={!locked}
+        />
       </div>
 
       {/* Name */}
@@ -58,25 +63,20 @@ export default function ChampionCard({ champion: c, selected, locked, onClick, s
 
       {!isSm && (
         <>
-          {/* Ability */}
           <div className="text-center mb-2">
             <span className="text-xs text-arena-primary font-semibold">✦ {c.abilityName}</span>
           </div>
-
           {isLg && (
             <p className="text-xs text-arena-muted mb-3 text-center leading-relaxed">
               {c.abilityDesc}
             </p>
           )}
-
-          {/* Stat bars */}
           <div className="flex flex-col gap-1.5">
-            <StatBar label="HP"  value={c.maxHp}    max={200} color="bg-arena-success" />
-            <StatBar label="ATK" value={c.attack}   max={55}  color="bg-arena-danger"  />
-            <StatBar label="DEF" value={c.defense}  max={45}  color="bg-arena-info"    />
-            <StatBar label="SPD" value={c.speed}    max={35}  color="bg-arena-primary" />
+            <StatBar label="HP"  value={c.maxHp}   max={200} color="bg-arena-success" />
+            <StatBar label="ATK" value={c.attack}  max={55}  color="bg-arena-danger"  />
+            <StatBar label="DEF" value={c.defense} max={45}  color="bg-arena-info"    />
+            <StatBar label="SPD" value={c.speed}   max={35}  color="bg-arena-primary" />
           </div>
-
           {isLg && (
             <div className="mt-3 flex gap-2 justify-center text-xs text-arena-muted">
               <span>🎯 {c.critPct}% crit</span>
@@ -88,8 +88,8 @@ export default function ChampionCard({ champion: c, selected, locked, onClick, s
       )}
 
       {locked && (
-        <div className="absolute inset-0 flex items-center justify-center bg-arena-bg/30 rounded-2xl">
-          <span className="text-xs text-arena-muted">⚔️ Em batalha</span>
+        <div className="absolute inset-0 flex items-center justify-center bg-arena-bg/40 rounded-2xl">
+          <span className="text-xs text-arena-muted bg-arena-bg/80 px-2 py-1 rounded-lg">⚔️ In Battle</span>
         </div>
       )}
     </div>

@@ -1,5 +1,5 @@
 import { createConfig, http } from "wagmi";
-import { injected } from "@wagmi/connectors";
+import { injected, coinbaseWallet, walletConnect } from "wagmi/connectors";
 import { defineChain } from "viem";
 
 // ─── Celo chains ──────────────────────────────────────────────────────────────
@@ -15,10 +15,6 @@ export const celo = defineChain({
   blockExplorers: {
     default: { name: "Celoscan", url: "https://celoscan.io" },
   },
-  contracts: {
-    // cUSD stablecoin
-    cUSD: { address: "0x765DE816845861e75A25fCA122bb6898B8B1282a" },
-  },
 });
 
 export const celoAlfajores = defineChain({
@@ -33,23 +29,47 @@ export const celoAlfajores = defineChain({
     default: { name: "Celoscan Alfajores", url: "https://alfajores.celoscan.io" },
   },
   testnet: true,
-  contracts: {
-    cUSD: { address: "0x874069Fa1Eb16D44d622F2e0Ca25eeA172369bC1" },
-  },
 });
 
-// ─── Detect active network from env ──────────────────────────────────────────
-
-const IS_TESTNET = import.meta.env.VITE_NETWORK === "alfajores";
+const IS_TESTNET   = import.meta.env.VITE_NETWORK === "alfajores";
 export const activeChain = IS_TESTNET ? celoAlfajores : celo;
 
-// ─── Wagmi config ─────────────────────────────────────────────────────────────
-// injected() covers both MiniPay's window.ethereum and MetaMask
+// ─── Connectors ────────────────────────────────────────────────────────────────
+// WalletConnect projectId — get one free at https://cloud.walletconnect.com
+const WC_PROJECT_ID = import.meta.env.VITE_WC_PROJECT_ID ?? "bahia-arena-demo";
+
+export const WALLET_CONNECTORS = {
+  metaMask: injected({ target: "metaMask" }),
+  rabby:    injected({
+    target() {
+      return {
+        id:       "rabby",
+        name:     "Rabby Wallet",
+        provider: (typeof window !== "undefined"
+          ? (window as any).rabby ?? (window as any).ethereum
+          : undefined),
+      };
+    },
+  }),
+  injected:       injected(),          // any injected wallet (fallback)
+  walletConnect:  walletConnect({ projectId: WC_PROJECT_ID }),
+  coinbase:       coinbaseWallet({ appName: "Bahia Arena" }),
+  miniPay:        injected({           // MiniPay injects window.ethereum
+    target() {
+      return {
+        id:       "minipay",
+        name:     "MiniPay",
+        provider: (typeof window !== "undefined"
+          ? (window as any).ethereum
+          : undefined),
+      };
+    },
+  }),
+};
 
 export const wagmiConfig = createConfig({
-  chains:      [activeChain],
-  connectors:  [injected()],
-  transports:  { [activeChain.id]: http() },
-  // Reduce polling – Celo finalises in ~5s, no need for aggressive polling
+  chains:     [activeChain],
+  connectors: Object.values(WALLET_CONNECTORS),
+  transports: { [activeChain.id]: http() },
   pollingInterval: 6_000,
 });
