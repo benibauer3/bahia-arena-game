@@ -1,5 +1,5 @@
 /**
- * deploy.js – Deploy BahiaArenaCreature + ArenaManager to Celo (Alfajores or Mainnet)
+ * deploy.js – Deploy BahiaChampion + ArenaManager (v2) to Celo Alfajores or Mainnet
  *
  * Usage:
  *   npx hardhat run scripts/deploy.js --network alfajores
@@ -8,23 +8,24 @@
 
 const { ethers, network } = require("hardhat");
 
-// ─── Network-specific addresses ───────────────────────────────────────────────
+// ─── Network config ───────────────────────────────────────────────────────────
 const CONFIG = {
   alfajores: {
-    cUSD:          "0x874069Fa1Eb16D44d622F2e0Ca25eeA172369bC1",
-    mintPrice:     ethers.parseUnits("0.5", 18),   // 0.5 cUSD (18 dec on Alfajores)
-    minStake:      ethers.parseUnits("0.1", 18),
+    usdt:          "0x874069Fa1Eb16D44d622F2e0Ca25eeA172369bC1", // cUSD as USDT proxy on testnet
+    entryFee:      ethers.parseUnits("1",   18),   // 1 cUSD (18 dec on Alfajores)
+    minStake:      ethers.parseUnits("0.5", 18),
     maxStake:      ethers.parseUnits("10",  18),
-    protocolFee:   200,                             // 2%
-    baseTokenURI:  "ipfs://QmPlaceholderCID/",
+    protocolFee:   200,                            // 2%
+    baseURI:       "ipfs://QmBahiaChampionsCID/",
   },
   celo: {
-    cUSD:          "0x765DE816845861e75A25fCA122bb6898B8B1282a",
-    mintPrice:     ethers.parseUnits("1",   18),   // 1 cUSD
-    minStake:      ethers.parseUnits("0.5", 18),
-    maxStake:      ethers.parseUnits("50",  18),
+    // USDT on Celo Mainnet (6 decimals)
+    usdt:          "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e",
+    entryFee:      ethers.parseUnits("1",   6),   // 1 USDT (6 dec)
+    minStake:      ethers.parseUnits("0.5", 6),
+    maxStake:      ethers.parseUnits("50",  6),
     protocolFee:   200,
-    baseTokenURI:  "ipfs://QmBahiaArenaCreaturesCID/",
+    baseURI:       "ipfs://QmBahiaChampionsCID/",
   },
 };
 
@@ -41,74 +42,71 @@ async function main() {
   console.log(`Balance  : ${ethers.formatEther(bal)} CELO`);
   console.log("─".repeat(60));
 
-  // ── 1. Deploy BahiaArenaCreature ─────────────────────────────────────────
-  console.log("\n[1/3] Deploying BahiaArenaCreature...");
-  const Creature = await ethers.getContractFactory("BahiaArenaCreature");
-  const creature = await Creature.deploy(cfg.cUSD, cfg.mintPrice, cfg.baseTokenURI);
-  await creature.waitForDeployment();
-  const creatureAddr = await creature.getAddress();
-  console.log(`      ✓ BahiaArenaCreature: ${creatureAddr}`);
+  // ── 1. Deploy BahiaChampion ───────────────────────────────────────────────
+  console.log("\n[1/4] Deploying BahiaChampion (Soulbound)...");
+  const Champion = await ethers.getContractFactory("BahiaChampion");
+  const champion = await Champion.deploy(cfg.baseURI);
+  await champion.waitForDeployment();
+  const championAddr = await champion.getAddress();
+  console.log(`      ✓ BahiaChampion: ${championAddr}`);
 
-  // ── 2. Deploy ArenaManager ───────────────────────────────────────────────
-  console.log("\n[2/3] Deploying ArenaManager...");
-  const oracle = deployer.address; // replace with game server address in prod
+  // ── 2. Deploy ArenaManager ────────────────────────────────────────────────
+  console.log("\n[2/4] Deploying ArenaManager...");
+  const oracle = deployer.address; // replace with dedicated game server key in prod
   const Arena  = await ethers.getContractFactory("ArenaManager");
   const arena  = await Arena.deploy(
-    creatureAddr,
-    cfg.cUSD,
+    cfg.usdt,
+    championAddr,
     oracle,
-    cfg.protocolFee,
+    cfg.entryFee,
     cfg.minStake,
     cfg.maxStake,
+    cfg.protocolFee,
   );
   await arena.waitForDeployment();
   const arenaAddr = await arena.getAddress();
-  console.log(`      ✓ ArenaManager:       ${arenaAddr}`);
+  console.log(`      ✓ ArenaManager: ${arenaAddr}`);
 
-  // ── 3. Wire up: set ArenaManager in Creature contract ───────────────────
-  console.log("\n[3/3] Setting ArenaManager on Creature contract...");
-  const tx = await creature.setArenaManager(arenaAddr);
-  await tx.wait();
-  console.log("      ✓ ArenaManager wired");
+  // ── 3. Wire ArenaManager into BahiaChampion ───────────────────────────────
+  console.log("\n[3/4] Wiring ArenaManager into BahiaChampion...");
+  await (await champion.setArenaManager(arenaAddr)).wait();
+  console.log("      ✓ Done");
 
-  // ── Summary ──────────────────────────────────────────────────────────────
+  // ── 4. Write addresses for frontend ──────────────────────────────────────
+  console.log("\n[4/4] Writing address file for frontend...");
+  const fs   = require("fs");
+  const path = require("path");
+
+  const summary = {
+    network:        network.name,
+    BahiaChampion:  championAddr,
+    ArenaManager:   arenaAddr,
+    usdt:           cfg.usdt,
+    oracle:         oracle,
+    entryFee:       ethers.formatUnits(cfg.entryFee, network.name === "celo" ? 6 : 18) + " USDT",
+    protocolFee:    cfg.protocolFee / 100 + "%",
+  };
+
+  const outPath = path.join(__dirname, `../frontend/src/lib/contracts.${network.name}.json`);
+  fs.writeFileSync(outPath, JSON.stringify(summary, null, 2));
+  console.log(`      ✓ Written to: ${outPath}`);
+
+  // ── Summary ───────────────────────────────────────────────────────────────
   console.log("\n" + "─".repeat(60));
   console.log("DEPLOYMENT COMPLETE");
   console.log("─".repeat(60));
-  const summary = {
-    network:               network.name,
-    BahiaArenaCreature:    creatureAddr,
-    ArenaManager:          arenaAddr,
-    paymentToken:          cfg.cUSD,
-    oracle:                oracle,
-    mintPrice:             ethers.formatUnits(cfg.mintPrice, 18) + " cUSD",
-    protocolFee:           cfg.protocolFee / 100 + "%",
-  };
   console.log(JSON.stringify(summary, null, 2));
 
-  // ── Write addresses file for frontend ────────────────────────────────────
-  const fs   = require("fs");
-  const path = require("path");
-  const outPath = path.join(__dirname, `../frontend/src/lib/contracts.${network.name}.json`);
-  fs.writeFileSync(outPath, JSON.stringify(summary, null, 2));
-  console.log(`\nAddresses written to: ${outPath}`);
-
-  // ── Verify on Celoscan (optional) ────────────────────────────────────────
+  // ── Optional Celoscan verify ──────────────────────────────────────────────
   if (process.env.CELOSCAN_API_KEY) {
-    console.log("\nVerifying contracts on Celoscan...");
     const { run } = require("hardhat");
-    await run("verify:verify", {
-      address: creatureAddr,
-      constructorArguments: [cfg.cUSD, cfg.mintPrice, cfg.baseTokenURI],
-    });
+    console.log("\nVerifying on Celoscan...");
+    await run("verify:verify", { address: championAddr, constructorArguments: [cfg.baseURI] });
     await run("verify:verify", {
       address: arenaAddr,
-      constructorArguments: [creatureAddr, cfg.cUSD, oracle, cfg.protocolFee, cfg.minStake, cfg.maxStake],
+      constructorArguments: [cfg.usdt, championAddr, oracle, cfg.entryFee, cfg.minStake, cfg.maxStake, cfg.protocolFee],
     });
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exitCode = 1;
-});
+main().catch((err) => { console.error(err); process.exitCode = 1; });

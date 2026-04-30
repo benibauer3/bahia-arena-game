@@ -7,75 +7,104 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "./BahiaArenaCreature.sol";
+import "./BahiaChampion.sol";
+import "./libs/ChampionTypes.sol";
+import "./libs/BattleEngine.sol";
 
 /**
  * @title ArenaManager
- * @notice Hybrid battle system for Bahia Arena.
+ * @notice Main game contract for Bahia Arena.
  *
- * Flow:
- *  1. Player A calls createBattle() – locks creature + stakes cUSD in escrow.
- *  2. Player B calls joinBattle() – locks creature + matches the stake.
- *  3. Battle is played off-chain (game server runs simulation).
- *  4. Game server (oracle) signs the result; either player submits it via resolveBattle().
- *  5. Winner receives (2 × stake − protocol fee) immediately.
+ * ── Deposit / Withdrawal ──────────────────────────────────────────────────────
+ *  • deposit()    – pay entryFee (default: 1 USDT), receive all 5 soulbound champions.
+ *  • withdraw()   – return champions and refund entry fee (no active battle).
  *
- * All payouts in stablecoin (cUSD / USDT).  Protocol fee ≤ 5%.
+ * ── Battle Flow ───────────────────────────────────────────────────────────────
+ *  1. createBattle(class, additionalStake) – choose champion + add optional stake.
+ *  2. joinBattle(battleId, class)          – opponent mirrors stake.
+ *  3. resolveBattle(battleId, sig)         – oracle signs winner; instant USDT payout.
+ *     OR: resolveOnChain(battleId)         – fully on-chain simulation (no oracle needed).
+ *  4. cancelBattle(battleId)              – cancel OPEN battle or timed-out ACTIVE battle.
+ *
+ * ── Reward Pool ──────────────────────────────────────────────────────────────
+ *  • Protocol fee (default 2%) accumulates in rewardPool.
+ *  • Owner can distribute rewardPool to tournaments / top players.
+ *
+ * ── Security ─────────────────────────────────────────────────────────────────
+ *  • SafeERC20 for all USDT operations (handles non-standard ERC-20s).
+ *  • ReentrancyGuard on all state-changing external functions.
+ *  • ECDSA oracle signature with chainId + contract binding (prevents replay across chains).
+ *  • usedSignatures mapping prevents oracle signature replay.
  */
 contract ArenaManager is Ownable, ReentrancyGuard {
-    using SafeERC20 for IERC20;
-    using ECDSA for bytes32;
+    using SafeERC20      for IERC20;
+    using ECDSA          for bytes32;
     using MessageHashUtils for bytes32;
+    using ChampionTypes  for ChampionTypes.Class;
+    using BattleEngine   for ChampionTypes.BattleUnit;
 
     // ─── Types ────────────────────────────────────────────────────────────────
 
     enum BattleStatus { OPEN, ACTIVE, RESOLVED, CANCELLED }
 
     struct Battle {
-        address playerA;
-        address playerB;
-        uint256 creatureA;
-        uint256 creatureB;
-        uint256 stake;          // per player, in stablecoin (6 dec)
-        BattleStatus status;
-        address winner;
-        uint64  createdAt;
-        uint64  startedAt;
+        address              playerA;
+        address              playerB;
+        ChampionTypes.Class  classA;
+        ChampionTypes.Class  classB;
+        uint256              stake;       // per player in USDT (token decimals)
+        BattleStatus         status;
+        address              winner;
+        uint64               createdAt;
+        uint64               startedAt;
     }
+
+    // ─── Constants ────────────────────────────────────────────────────────────
+
+    uint256 public constant MAX_FEE_BPS = 500; // 5%
 
     // ─── State ─────────────────────────────────────────────────────────────────
 
-    BahiaArenaCreature public creatureContract;
-    IERC20             public paymentToken;
-    address            public oracle;           // game server that signs results
-    uint256            public protocolFeeBps;   // basis points (100 = 1%)
-    uint256            public minStake;
-    uint256            public maxStake;
-    uint256            public battleTimeout;    // seconds before cancellable
-    uint256            public nextBattleId;
+    IERC20          public usdt;
+    BahiaChampion   public championContract;
+    address         public oracle;
 
-    mapping(uint256 => Battle) public battles;
-    // creature => active battleId (+1, 0 means not in battle)
-    mapping(uint256 => uint256) public creatureActiveBattle;
-    // prevent oracle signature replay
-    mapping(bytes32 => bool) public usedSignatures;
+    uint256 public entryFee;        // 1 USDT = 1_000_000 (6 dec)
+    uint256 public minStake;        // minimum battle stake
+    uint256 public maxStake;        // maximum battle stake
+    uint256 public protocolFeeBps;  // protocol fee in basis points
+    uint256 public battleTimeout;   // seconds before timed-out battle is cancellable
+    uint256 public nextBattleId;
 
-    uint256 public accumulatedFees;
+    uint256 public rewardPool;      // accumulated protocol fees
+
+    // deposits: player => deposited amount (refundable entry fee)
+    mapping(address => uint256) public deposits;
+
+    mapping(uint256 => Battle)  public battles;
+    mapping(bytes32 => bool)    public usedSignatures;
+
+    // track player's active battleId (+1, 0 = none)
+    mapping(address => uint256) public playerActiveBattle;
 
     // ─── Events ────────────────────────────────────────────────────────────────
 
-    event BattleCreated(uint256 indexed battleId, address indexed playerA, uint256 creatureA, uint256 stake);
-    event BattleJoined(uint256 indexed battleId, address indexed playerB, uint256 creatureB);
-    event BattleResolved(uint256 indexed battleId, address indexed winner, uint256 payout);
+    event Deposited(address indexed player, uint256 amount);
+    event Withdrawn(address indexed player, uint256 amount);
+    event BattleCreated(uint256 indexed battleId, address indexed playerA, ChampionTypes.Class classA, uint256 stake);
+    event BattleJoined(uint256 indexed battleId, address indexed playerB, ChampionTypes.Class classB);
+    event BattleResolved(uint256 indexed battleId, address indexed winner, uint256 payout, bool onChain);
     event BattleCancelled(uint256 indexed battleId);
-    event FeesWithdrawn(address indexed to, uint256 amount);
-    event OracleUpdated(address newOracle);
+    event RewardDistributed(address indexed recipient, uint256 amount);
+    event OracleUpdated(address oracle);
+    event EntryFeeUpdated(uint256 fee);
 
     // ─── Errors ────────────────────────────────────────────────────────────────
 
+    error AlreadyDeposited();
+    error NotDeposited();
+    error HasActiveBattle();
     error InvalidStake();
-    error NotCreatureOwner();
-    error CreatureAlreadyInBattle();
     error BattleNotOpen();
     error BattleNotActive();
     error CannotJoinOwnBattle();
@@ -84,88 +113,134 @@ contract ArenaManager is Ownable, ReentrancyGuard {
     error BattleNotTimedOut();
     error FeeTooHigh();
     error ZeroAddress();
+    error InsufficientRewardPool();
+    error InvalidWinner();
 
     // ─── Constructor ───────────────────────────────────────────────────────────
 
     constructor(
-        address _creatureContract,
-        address _paymentToken,
+        address _usdt,
+        address _championContract,
         address _oracle,
-        uint256 _protocolFeeBps,
+        uint256 _entryFee,
         uint256 _minStake,
-        uint256 _maxStake
+        uint256 _maxStake,
+        uint256 _protocolFeeBps
     ) Ownable(msg.sender) {
-        if (_protocolFeeBps > 500) revert FeeTooHigh(); // max 5%
-        creatureContract = BahiaArenaCreature(_creatureContract);
-        paymentToken     = IERC20(_paymentToken);
-        oracle           = _oracle;
-        protocolFeeBps   = _protocolFeeBps;
-        minStake         = _minStake;
-        maxStake         = _maxStake;
-        battleTimeout    = 30 minutes;
+        if (_protocolFeeBps > MAX_FEE_BPS) revert FeeTooHigh();
+        usdt               = IERC20(_usdt);
+        championContract   = BahiaChampion(_championContract);
+        oracle             = _oracle;
+        entryFee           = _entryFee;
+        minStake           = _minStake;
+        maxStake           = _maxStake;
+        protocolFeeBps     = _protocolFeeBps;
+        battleTimeout      = 30 minutes;
     }
 
-    // ─── Public: Battle Lifecycle ──────────────────────────────────────────────
+    // ─── Public: Deposit / Withdraw ───────────────────────────────────────────
 
     /**
-     * @notice Create a new open battle. Caller must approve `stake` stablecoin and own `creatureId`.
+     * @notice Pay entry fee in USDT and receive all 5 soulbound champions.
+     *         Caller must approve `entryFee` USDT to this contract first.
      */
-    function createBattle(uint256 creatureId, uint256 stake)
+    function deposit() external nonReentrant {
+        if (deposits[msg.sender] > 0) revert AlreadyDeposited();
+
+        usdt.safeTransferFrom(msg.sender, address(this), entryFee);
+        deposits[msg.sender] = entryFee;
+
+        championContract.mintSet(msg.sender);
+
+        emit Deposited(msg.sender, entryFee);
+    }
+
+    /**
+     * @notice Return all 5 champions and receive entry fee refund.
+     *         Cannot withdraw while in an active battle.
+     */
+    function withdraw() external nonReentrant {
+        if (deposits[msg.sender] == 0)       revert NotDeposited();
+        if (playerActiveBattle[msg.sender] != 0) revert HasActiveBattle();
+
+        uint256 refund = deposits[msg.sender];
+        deposits[msg.sender] = 0;
+
+        championContract.burnSet(msg.sender);
+        usdt.safeTransfer(msg.sender, refund);
+
+        emit Withdrawn(msg.sender, refund);
+    }
+
+    // ─── Public: Battle Lifecycle ─────────────────────────────────────────────
+
+    /**
+     * @notice Create a new open battle with chosen champion.
+     * @param class_          Champion class to battle with (must be owned by caller)
+     * @param additionalStake Extra USDT stake on top of 0 (pure entry-fee battles have stake = 0)
+     */
+    function createBattle(ChampionTypes.Class class_, uint256 additionalStake)
         external
         nonReentrant
         returns (uint256 battleId)
     {
-        _validateStakeAndOwner(creatureId, stake);
-
-        paymentToken.safeTransferFrom(msg.sender, address(this), stake);
-        creatureContract.lockCreature(creatureId);
+        _requireDeposited(msg.sender);
+        if (playerActiveBattle[msg.sender] != 0) revert HasActiveBattle();
+        if (additionalStake > 0) {
+            if (additionalStake < minStake || additionalStake > maxStake) revert InvalidStake();
+            usdt.safeTransferFrom(msg.sender, address(this), additionalStake);
+        }
 
         battleId = nextBattleId++;
         battles[battleId] = Battle({
             playerA:   msg.sender,
             playerB:   address(0),
-            creatureA: creatureId,
-            creatureB: 0,
-            stake:     stake,
+            classA:    class_,
+            classB:    ChampionTypes.Class(0),
+            stake:     additionalStake,
             status:    BattleStatus.OPEN,
             winner:    address(0),
             createdAt: uint64(block.timestamp),
             startedAt: 0
         });
-        creatureActiveBattle[creatureId] = battleId + 1;
+        playerActiveBattle[msg.sender] = battleId + 1;
 
-        emit BattleCreated(battleId, msg.sender, creatureId, stake);
+        emit BattleCreated(battleId, msg.sender, class_, additionalStake);
     }
 
     /**
-     * @notice Join an existing open battle. Caller must approve `stake` stablecoin and own `creatureId`.
+     * @notice Join an existing open battle with chosen champion.
+     * @param battleId Battle to join
+     * @param class_   Your champion class
      */
-    function joinBattle(uint256 battleId, uint256 creatureId)
+    function joinBattle(uint256 battleId, ChampionTypes.Class class_)
         external
         nonReentrant
     {
         Battle storage b = battles[battleId];
-        if (b.status != BattleStatus.OPEN) revert BattleNotOpen();
-        if (b.playerA == msg.sender)       revert CannotJoinOwnBattle();
-        _validateStakeAndOwner(creatureId, b.stake);
+        if (b.status != BattleStatus.OPEN)      revert BattleNotOpen();
+        if (b.playerA == msg.sender)             revert CannotJoinOwnBattle();
+        _requireDeposited(msg.sender);
+        if (playerActiveBattle[msg.sender] != 0) revert HasActiveBattle();
 
-        paymentToken.safeTransferFrom(msg.sender, address(this), b.stake);
-        creatureContract.lockCreature(creatureId);
+        if (b.stake > 0) {
+            usdt.safeTransferFrom(msg.sender, address(this), b.stake);
+        }
 
         b.playerB    = msg.sender;
-        b.creatureB  = creatureId;
+        b.classB     = class_;
         b.status     = BattleStatus.ACTIVE;
         b.startedAt  = uint64(block.timestamp);
-        creatureActiveBattle[creatureId] = battleId + 1;
+        playerActiveBattle[msg.sender] = battleId + 1;
 
-        emit BattleJoined(battleId, msg.sender, creatureId);
+        emit BattleJoined(battleId, msg.sender, class_);
     }
 
     /**
-     * @notice Resolve a battle using an oracle-signed result.
-     * @param battleId  Battle to resolve
-     * @param winner    Address of the winner (playerA or playerB)
-     * @param sig       ECDSA signature from oracle: keccak256(battleId, winner, chainId, contract)
+     * @notice Resolve battle using oracle-signed result (hybrid path).
+     * @param battleId Battle to resolve
+     * @param winner   Address of the winner
+     * @param sig      Oracle ECDSA signature over keccak256(battleId,winner,chainId,contract)
      */
     function resolveBattle(uint256 battleId, address winner, bytes calldata sig)
         external
@@ -173,33 +248,57 @@ contract ArenaManager is Ownable, ReentrancyGuard {
     {
         Battle storage b = battles[battleId];
         if (b.status != BattleStatus.ACTIVE) revert BattleNotActive();
+        _validateWinner(b, winner);
 
-        // Verify oracle signature
         bytes32 msgHash = keccak256(abi.encodePacked(battleId, winner, block.chainid, address(this)));
         bytes32 ethHash = msgHash.toEthSignedMessageHash();
-        if (usedSignatures[ethHash])       revert SignatureAlreadyUsed();
+        if (usedSignatures[ethHash])        revert SignatureAlreadyUsed();
         if (ethHash.recover(sig) != oracle) revert InvalidSignature();
         usedSignatures[ethHash] = true;
 
-        _settleBattle(b, battleId, winner);
+        _settle(b, battleId, winner, false);
     }
 
     /**
-     * @notice Cancel an OPEN battle (not yet joined) or a timed-out ACTIVE battle.
-     *         Returns stakes to both players.
+     * @notice Resolve battle fully on-chain via BattleEngine simulation.
+     *         Anyone can call this — result is deterministic from contract state.
+     *         Seed = block.prevrandao XOR packed player addresses (good enough for casual play).
+     */
+    function resolveOnChain(uint256 battleId) external nonReentrant {
+        Battle storage b = battles[battleId];
+        if (b.status != BattleStatus.ACTIVE) revert BattleNotActive();
+
+        uint256 seed = uint256(
+            keccak256(abi.encodePacked(block.prevrandao, b.playerA, b.playerB, battleId))
+        );
+
+        ChampionTypes.BattleUnit memory unitA = BattleEngine.buildUnit(b.classA, b.playerA);
+        ChampionTypes.BattleUnit memory unitB = BattleEngine.buildUnit(b.classB, b.playerB);
+
+        (uint8 winnerIdx,) = BattleEngine.simulate(unitA, unitB, seed);
+        address winner     = winnerIdx == 0 ? b.playerA : b.playerB;
+
+        _settle(b, battleId, winner, true);
+    }
+
+    /**
+     * @notice Cancel an OPEN battle or a timed-out ACTIVE battle. Refunds stakes.
      */
     function cancelBattle(uint256 battleId) external nonReentrant {
         Battle storage b = battles[battleId];
 
-        if (b.status == BattleStatus.OPEN) {
-            if (msg.sender != b.playerA && msg.sender != owner()) revert BattleNotOpen();
-            _refundAndUnlock(b, battleId);
-        } else if (b.status == BattleStatus.ACTIVE) {
-            if (block.timestamp < b.startedAt + battleTimeout) revert BattleNotTimedOut();
-            _refundAndUnlock(b, battleId);
-        } else {
-            revert BattleNotOpen();
+        bool canCancel = b.status == BattleStatus.OPEN && (msg.sender == b.playerA || msg.sender == owner())
+            || (b.status == BattleStatus.ACTIVE && block.timestamp >= b.startedAt + battleTimeout);
+
+        if (!canCancel) revert BattleNotOpen();
+
+        if (b.stake > 0) {
+            usdt.safeTransfer(b.playerA, b.stake);
+            if (b.playerB != address(0)) usdt.safeTransfer(b.playerB, b.stake);
         }
+
+        playerActiveBattle[b.playerA] = 0;
+        if (b.playerB != address(0)) playerActiveBattle[b.playerB] = 0;
 
         b.status = BattleStatus.CANCELLED;
         emit BattleCancelled(battleId);
@@ -207,14 +306,26 @@ contract ArenaManager is Ownable, ReentrancyGuard {
 
     // ─── Owner: Admin ──────────────────────────────────────────────────────────
 
+    function distributeReward(address recipient, uint256 amount) external onlyOwner nonReentrant {
+        if (amount > rewardPool) revert InsufficientRewardPool();
+        rewardPool -= amount;
+        usdt.safeTransfer(recipient, amount);
+        emit RewardDistributed(recipient, amount);
+    }
+
     function setOracle(address _oracle) external onlyOwner {
         if (_oracle == address(0)) revert ZeroAddress();
         oracle = _oracle;
         emit OracleUpdated(_oracle);
     }
 
+    function setEntryFee(uint256 _fee) external onlyOwner {
+        entryFee = _fee;
+        emit EntryFeeUpdated(_fee);
+    }
+
     function setProtocolFee(uint256 _bps) external onlyOwner {
-        if (_bps > 500) revert FeeTooHigh();
+        if (_bps > MAX_FEE_BPS) revert FeeTooHigh();
         protocolFeeBps = _bps;
     }
 
@@ -225,13 +336,6 @@ contract ArenaManager is Ownable, ReentrancyGuard {
 
     function setBattleTimeout(uint256 _seconds) external onlyOwner {
         battleTimeout = _seconds;
-    }
-
-    function withdrawFees(address to) external onlyOwner nonReentrant {
-        uint256 amount = accumulatedFees;
-        accumulatedFees = 0;
-        paymentToken.safeTransfer(to, amount);
-        emit FeesWithdrawn(to, amount);
     }
 
     // ─── View ──────────────────────────────────────────────────────────────────
@@ -246,14 +350,13 @@ contract ArenaManager is Ownable, ReentrancyGuard {
         returns (Battle[] memory result, uint256[] memory ids)
     {
         uint256 count;
-        uint256 total = nextBattleId;
-        for (uint256 i = fromId; i < total && count < limit; i++) {
+        for (uint256 i = fromId; i < nextBattleId && count < limit; i++) {
             if (battles[i].status == BattleStatus.OPEN) count++;
         }
         result = new Battle[](count);
         ids    = new uint256[](count);
         uint256 idx;
-        for (uint256 i = fromId; i < total && idx < count; i++) {
+        for (uint256 i = fromId; i < nextBattleId && idx < count; i++) {
             if (battles[i].status == BattleStatus.OPEN) {
                 result[idx] = battles[i];
                 ids[idx]    = i;
@@ -262,47 +365,56 @@ contract ArenaManager is Ownable, ReentrancyGuard {
         }
     }
 
-    // ─── Internal ──────────────────────────────────────────────────────────────
-
-    function _validateStakeAndOwner(uint256 creatureId, uint256 stake) internal view {
-        if (stake < minStake || stake > maxStake) revert InvalidStake();
-        if (creatureContract.ownerOf(creatureId) != msg.sender) revert NotCreatureOwner();
-        if (creatureActiveBattle[creatureId] != 0) revert CreatureAlreadyInBattle();
+    /**
+     * @notice Simulate a battle outcome without executing it (frontend preview).
+     */
+    function simulateBattle(
+        ChampionTypes.Class classA,
+        address playerA,
+        ChampionTypes.Class classB,
+        address playerB,
+        uint256 seed
+    ) external pure returns (uint8 winner, uint8 turns) {
+        ChampionTypes.BattleUnit memory uA = BattleEngine.buildUnit(classA, playerA);
+        ChampionTypes.BattleUnit memory uB = BattleEngine.buildUnit(classB, playerB);
+        return BattleEngine.simulate(uA, uB, seed);
     }
 
-    function _settleBattle(Battle storage b, uint256 battleId, address winner) internal {
-        address loser = winner == b.playerA ? b.playerB : b.playerA;
+    function getChampionStats(ChampionTypes.Class class_)
+        external
+        pure
+        returns (ChampionTypes.BaseStats memory)
+    {
+        return ChampionTypes.getBaseStats(class_);
+    }
 
-        uint256 totalPot    = b.stake * 2;
-        uint256 fee         = (totalPot * protocolFeeBps) / 10_000;
-        uint256 winnerPay   = totalPot - fee;
-        accumulatedFees    += fee;
+    // ─── Internal ──────────────────────────────────────────────────────────────
 
+    function _settle(Battle storage b, uint256 battleId, address winner, bool onChain) internal {
         b.winner = winner;
         b.status = BattleStatus.RESOLVED;
 
-        // Unlock creatures
-        creatureContract.unlockCreature(b.creatureA);
-        creatureContract.unlockCreature(b.creatureB);
-        creatureActiveBattle[b.creatureA] = 0;
-        creatureActiveBattle[b.creatureB] = 0;
+        playerActiveBattle[b.playerA] = 0;
+        playerActiveBattle[b.playerB] = 0;
 
-        paymentToken.safeTransfer(winner, winnerPay);
+        if (b.stake > 0) {
+            uint256 pot     = b.stake * 2;
+            uint256 fee     = (pot * protocolFeeBps) / 10_000;
+            uint256 payout  = pot - fee;
+            rewardPool     += fee;
 
-        emit BattleResolved(battleId, winner, winnerPay);
-        (loser); // silence unused warning; loser forfeits stake
+            usdt.safeTransfer(winner, payout);
+            emit BattleResolved(battleId, winner, payout, onChain);
+        } else {
+            emit BattleResolved(battleId, winner, 0, onChain);
+        }
     }
 
-    function _refundAndUnlock(Battle storage b, uint256 battleId) internal {
-        creatureContract.unlockCreature(b.creatureA);
-        creatureActiveBattle[b.creatureA] = 0;
-        paymentToken.safeTransfer(b.playerA, b.stake);
+    function _requireDeposited(address player) internal view {
+        if (deposits[player] == 0) revert NotDeposited();
+    }
 
-        if (b.playerB != address(0)) {
-            creatureContract.unlockCreature(b.creatureB);
-            creatureActiveBattle[b.creatureB] = 0;
-            paymentToken.safeTransfer(b.playerB, b.stake);
-        }
-        (battleId);
+    function _validateWinner(Battle storage b, address winner) internal view {
+        if (winner != b.playerA && winner != b.playerB) revert InvalidWinner();
     }
 }
