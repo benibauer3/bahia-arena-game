@@ -8,8 +8,8 @@ export type BattleStatus = 0 | 1 | 2 | 3; // OPEN | ACTIVE | RESOLVED | CANCELLE
 export interface Battle {
   playerA:   `0x${string}`;
   playerB:   `0x${string}`;
-  creatureA: bigint;
-  creatureB: bigint;
+  classA:    number;
+  classB:    number;
   stake:     bigint;
   status:    BattleStatus;
   winner:    `0x${string}`;
@@ -18,10 +18,10 @@ export interface Battle {
 }
 
 export const STATUS_LABEL: Record<BattleStatus, string> = {
-  0: "Aberta",
-  1: "Em Batalha",
-  2: "Resolvida",
-  3: "Cancelada",
+  0: "Open",
+  1: "In Battle",
+  2: "Resolved",
+  3: "Cancelled",
 };
 
 // ─── Read hooks ───────────────────────────────────────────────────────────────
@@ -45,10 +45,10 @@ export function useBattle(battleId: bigint | undefined) {
   });
 }
 
-export function useCUSDBalance() {
+export function useUSDTBalance() {
   const { address } = useAccount();
   return useReadContract({
-    address:      ACTIVE_CONTRACTS.cUSD,
+    address:      ACTIVE_CONTRACTS.usdt,
     abi:          ERC20_ABI,
     functionName: "balanceOf",
     args:         address ? [address] : undefined,
@@ -56,10 +56,10 @@ export function useCUSDBalance() {
   });
 }
 
-export function useCUSDAllowance(spender: `0x${string}`) {
+export function useUSDTAllowance(spender: `0x${string}`) {
   const { address } = useAccount();
   return useReadContract({
-    address:      ACTIVE_CONTRACTS.cUSD,
+    address:      ACTIVE_CONTRACTS.usdt,
     abi:          ERC20_ABI,
     functionName: "allowance",
     args:         address ? [address, spender] : undefined,
@@ -69,34 +69,33 @@ export function useCUSDAllowance(spender: `0x${string}`) {
 
 // ─── Write hooks ──────────────────────────────────────────────────────────────
 
-/** Approve cUSD spend then create a battle (2 tx). Returns helpers to drive the flow. */
+/** Approve USDT spend then create a battle (2 tx). Returns helpers to drive the flow. */
 export function useCreateBattle() {
   const approve    = useWriteContract();
   const create     = useWriteContract();
   const approveRct = useWaitForTransactionReceipt({ hash: approve.data });
   const createRct  = useWaitForTransactionReceipt({ hash: create.data });
 
-  async function submit(creatureId: bigint, stakeUSD: string) {
+  async function submit(classIndex: number, stakeUSD: string) {
     const stakeWei = parseUnits(stakeUSD, 18);
 
-    // Step 1 – approve cUSD
+    // Step 1 – approve USDT
     const approveTx = await approve.writeContractAsync({
-      address:      ACTIVE_CONTRACTS.cUSD,
+      address:      ACTIVE_CONTRACTS.usdt,
       abi:          ERC20_ABI,
       functionName: "approve",
       args:         [ACTIVE_CONTRACTS.ArenaManager, stakeWei],
     });
-    // The receipt hook watches approveTx automatically via approve.data
 
     return { approveTx, stakeWei };
   }
 
-  async function createAfterApproval(creatureId: bigint, stakeWei: bigint) {
+  async function createAfterApproval(classIndex: number, stakeWei: bigint) {
     return create.writeContractAsync({
       address:      ACTIVE_CONTRACTS.ArenaManager,
       abi:          ARENA_ABI,
       functionName: "createBattle",
-      args:         [creatureId, stakeWei],
+      args:         [classIndex, stakeWei],
     });
   }
 
@@ -116,9 +115,9 @@ export function useJoinBattle() {
   const join     = useWriteContract();
   const joinRct  = useWaitForTransactionReceipt({ hash: join.data });
 
-  async function submit(battleId: bigint, creatureId: bigint, stake: bigint) {
+  async function submit(battleId: bigint, classIndex: number, stake: bigint) {
     await approve.writeContractAsync({
-      address:      ACTIVE_CONTRACTS.cUSD,
+      address:      ACTIVE_CONTRACTS.usdt,
       abi:          ERC20_ABI,
       functionName: "approve",
       args:         [ACTIVE_CONTRACTS.ArenaManager, stake],
@@ -127,7 +126,7 @@ export function useJoinBattle() {
       address:      ACTIVE_CONTRACTS.ArenaManager,
       abi:          ARENA_ABI,
       functionName: "joinBattle",
-      args:         [battleId, creatureId],
+      args:         [battleId, classIndex],
     });
   }
 

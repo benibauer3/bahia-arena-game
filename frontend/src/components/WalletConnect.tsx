@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAccount, useConnect, useDisconnect, useBalance } from "wagmi";
 import { formatUnits } from "viem";
 import { useMiniPay } from "@/hooks/useMiniPay";
-import { useCUSDBalance } from "@/hooks/useBattle";
+import { useUSDTBalance } from "@/hooks/useBattle";
 import { WALLET_CONNECTORS } from "@/lib/wagmiConfig";
 
 // ─── Wallet definitions for UI ────────────────────────────────────────────────
@@ -120,7 +120,7 @@ export default function WalletConnect() {
   const { address, isConnected, chain } = useAccount();
   const { disconnect }                  = useDisconnect();
   const { data: celoBalance }           = useBalance({ address });
-  const { data: cusdBalance }           = useCUSDBalance();
+  const { data: cusdBalance }           = useUSDTBalance();
   const [showModal, setShowModal]       = useState(false);
   const { isMiniPay }                   = useMiniPay();
 

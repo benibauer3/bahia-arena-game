@@ -70,6 +70,9 @@ export const WALLET_CONNECTORS = {
 export const wagmiConfig = createConfig({
   chains:     [activeChain],
   connectors: Object.values(WALLET_CONNECTORS),
-  transports: { [activeChain.id]: http() },
+  transports: {
+    [celo.id]:          http(),
+    [celoAlfajores.id]: http(),
+  },
   pollingInterval: 6_000,
 });
