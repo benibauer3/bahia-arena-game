@@ -1,5 +1,5 @@
 
-# Bahia Arena 🏟️  
+# Bahia Arena 
 **The Strategy Game on Celo.**
 
 **Bahia Arena** redefines Web3 Gaming for emerging markets. Unlike traditional models, this is **not an NFT-based game**. We have eliminated the "Pay-to-Own" barrier to focus on accessibility and skill: users simply deposit **USDT (Celo)** to enter strategic battles and earn instant rewards. 
@@ -14,7 +14,7 @@ By leveraging the **Opera MiniPay** ecosystem, Bahia Arena offers a seamless, mo
 
 ---
 
-## 🏗️ Project Architecture
+## Project Architecture
 
 ```bash
 Bahia Arena - Game/
@@ -33,7 +33,7 @@ Bahia Arena - Game/
 
 ---
 
-## ⚔️ Battle Mechanics (Skill-Based / Pay-per-Play)
+## Battle Mechanics (Skill-Based / Pay-per-Play)
 
 The Bahia Arena model focuses on **capital utility** and player strategy:
 
@@ -43,7 +43,7 @@ The Bahia Arena model focuses on **capital utility** and player strategy:
 
 ---
 
-## 🛠️ Installation Guide
+## Installation Guide
 
 ### Prerequisites
 *   Node.js >= 20
