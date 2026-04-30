@@ -46,8 +46,6 @@ Bahia Arena - Game/
 
 - Node.js >= 20  
 - npm ou pnpm  
-- Conta Celo com CELO para gas (gratuito no Alfajores via faucet)
-
 ---
 
 ## Setup – Contratos
@@ -126,15 +124,6 @@ Player A                  Smart Contract            Player B
 - **Gas**: ~0.001 CELO por transação (~$0.0004)
 - **Liquidação**: < 30 segundos após submit do resultado
 - **Fee do protocolo**: 2% do pot (configurável, máx 5%)
-
----
-
-## Endereços de Tokens cUSD
-
-| Rede       | Endereço                                     |
-|------------|----------------------------------------------|
-| Alfajores  | `0x874069Fa1Eb16D44d622F2e0Ca25eeA172369bC1` |
-| Mainnet    | `0x765DE816845861e75A25fCA122bb6898B8B1282a` |
 
 ---
 
