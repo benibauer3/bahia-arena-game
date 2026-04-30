@@ -1,146 +1,66 @@
-# Bahia Arena 🏟️
 
-Jogo de estratégia por turnos (estilo Axie Infinity) na blockchain Celo.  
-Mobile-first, otimizado para MiniPay (Opera Browser).  
-Pagamentos e recompensas 100% em USD.
+# Bahia Arena 🏟️  
+**The Strategy Game on Celo.**
+
+**Bahia Arena** redefines Web3 Gaming for emerging markets. Unlike traditional models, this is **not an NFT-based game**. We have eliminated the "Pay-to-Own" barrier to focus on accessibility and skill: users simply deposit **USDT (Celo)** to enter strategic battles and earn instant rewards. 
+
+By leveraging the **Opera MiniPay** ecosystem, Bahia Arena offers a seamless, mobile-first experience for retail users, removing technical hurdles like minting or managing volatile secondary assets.
+
+### 🌟 Key Strategic Pillars (Zero-NFT Policy)
+*   **Direct Entry with USDT:** Deposit the stablecoin balance you already hold in **MiniPay** and enter the arena instantly.
+*   **Free-to-Play Characters:** Upon entry, players gain access to a roster of legendary Brazilian mythological champions (Curupira, Boitatá, Iara, etc.) as base characters—no purchase required.
+*   **Performance-Driven:** All financial logic is powered by USDT Escrow smart contracts, ensuring secure and rapid settlements on the Celo network.
+*   **MiniPay Optimized:** A native mobile experience designed for the everyday user, featuring zero-friction onboarding and intuitive UI.
 
 ---
 
-## Estrutura do Projeto
+## 🏗️ Project Architecture
 
-```
+```bash
 Bahia Arena - Game/
 ├── contracts/
-│   ├── BahiaArenaCreature.sol   # ERC-721 NFT com stats on-chain
-│   ├── ArenaManager.sol         # Sistema de batalha + escrow
-│   └── mocks/ERC20Mock.sol      # Mock cUSD para testes
-├── scripts/
-│   └── deploy.js                # Deploy + verificação Celoscan
-├── test/
-│   └── BahiaArena.test.js       # Suite de testes Hardhat
+│   ├── ArenaManager.sol         # USDT Escrow, Battle Logic & Reward Distribution
+│   └── mocks/ERC20Mock.sol      # Test environment for USDT/cUSD
 ├── frontend/
 │   ├── src/
-│   │   ├── lib/
-│   │   │   ├── wagmiConfig.ts   # Chains Celo + Alfajores
-│   │   │   └── contracts.ts     # ABIs + endereços por rede
 │   │   ├── hooks/
-│   │   │   ├── useMiniPay.ts    # Detecção do MiniPay
-│   │   │   ├── useCreatures.ts  # Leitura de NFTs
-│   │   │   └── useBattle.ts     # Batalhas (create/join/resolve)
-│   │   ├── components/
-│   │   │   ├── WalletConnect.tsx
-│   │   │   ├── CreatureCard.tsx
-│   │   │   └── BattleCard.tsx
+│   │   │   ├── useMiniPay.ts    # Opera MiniPay Detection & UX Optimization
+│   │   │   └── useBattle.ts     # USDT-based Arena Entry Flow
 │   │   └── pages/
-│   │       ├── Home.tsx
-│   │       ├── Arena.tsx
-│   │       └── Roster.tsx
-│   └── package.json
-├── hardhat.config.js
-└── package.json
+│   │       └── Arena.tsx        # Mobile-first Battle Dashboard
+└── hardhat.config.js
 ```
 
 ---
 
-## Pré-requisitos
+## ⚔️ Battle Mechanics (Skill-Based / Pay-per-Play)
 
-- Node.js >= 20  
-- npm ou pnpm  
+The Bahia Arena model focuses on **capital utility** and player strategy:
+
+1.  **Entry Deposit:** The player selects a battle room and deposits a set entry fee in USDT.
+2.  **Strategic Equity:** Since there are no rare or expensive NFTs with superior stats, victory depends entirely on the player's strategy and the tactical use of the mythological champions' abilities.
+3.  **Instant Settlement:** The winner of the round receives the total prize pool (minus a small protocol fee) directly into their MiniPay wallet in under 3 minutes.
+
 ---
 
-## Setup – Contratos
+## 🛠️ Installation Guide
 
+### Prerequisites
+*   Node.js >= 20
+*   Metamask Wallet (Alfajores for testing)
+*   USDT/USDm balance (Celo Mainnet or Testnet)
+
+### Deploy & Setup
 ```bash
-# 1. Instalar dependências
-cd "Bahia Arena - Game"
+# Install dependencies
 npm install
 
-# 2. Copiar e preencher variáveis de ambiente
-cp .env.example .env
-# PRIVATE_KEY=0x...   ← sua chave de deploy
-# CELOSCAN_API_KEY=   ← opcional, para verificação
-
-# 3. Compilar
+# Compile Arena Smart Contracts
 npm run compile
 
-# 4. Testes
-npm test
-
-# 5. Deploy no Alfajores (testnet)
+# Deploy USDT Escrow Contract
 npm run deploy:alfajores
-
-# 6. Deploy na Mainnet Celo
-npm run deploy:celo
 ```
 
-O script de deploy escreve automaticamente os endereços em  
-`frontend/src/lib/contracts.alfajores.json` (ou `.celo.json`).
-
-**Faucet Alfajores:** https://faucet.celo.org/alfajores
-
----
-
-## Setup – Frontend
-
-```bash
-cd "Bahia Arena - Game/frontend"
-npm install
-
-# Copiar .env
-cp .env.example .env
-# VITE_NETWORK=alfajores   (ou "celo" para mainnet)
-
-# Após o deploy, atualizar os endereços em:
-# src/lib/contracts.ts  →  CONTRACTS.alfajores.BahiaArenaCreature / ArenaManager
-
-# Desenvolvimento
-npm run dev
-
-# Build produção
-npm run build
-```
-
----
-
-## Arquitetura de Batalha (Híbrida)
-
-```
-Player A                  Smart Contract            Player B
-   │                           │                       │
-   │── createBattle() ────────>│                       │
-   │   (approve cUSD + lock    │                       │
-   │    creature no escrow)    │                       │
-   │                           │<── joinBattle() ──────│
-   │                           │    (idem)             │
-   │                                                   │
-   │           ◄── Batalha simulada off-chain ─────────│
-   │                   (game server)                   │
-   │                           │                       │
-   │── resolveBattle() ────────│                       │
-   │   (assinatura do oracle)  │                       │
-   │                           │── payout cUSD ───────>│ (ou A ganha)
-```
-
-- **Gas**: ~0.001 CELO por transação (~$0.0004)
-- **Liquidação**: < 30 segundos após submit do resultado
-- **Fee do protocolo**: 2% do pot (configurável, máx 5%)
-
----
-
-## Detecção MiniPay
-
-O hook `useMiniPay` verifica:
-1. `window.ethereum.isMiniPay === true`
-2. `navigator.userAgent.includes("MiniPay")`
-
-Quando detectado, o botão de conexão exibe "Conectar MiniPay" e o banner verde aparece na Home.
-
----
-
-## Próximos Passos
-
-- [ ] Arte das criaturas (sprites por elemento)
-- [ ] Sistema de ranking on-chain
-- [ ] Torneios com pool de premiação
-- [ ] Breeding de criaturas (EIP-2535 / extensão do ERC-721)
-- [ ] Push notifications via MiniPay SDK quando batalha for resolvida
+### Dica Extra:
+Se você for postar isso no LinkedIn ou no X, use essa versão em inglês para marcar os perfis oficiais da **Celo Foundation**, **Opera Crypto** e do **Talent Protocol**. Isso mostra que o projeto tem escala global, mesmo nascendo na Bahia! 🚀🌳
