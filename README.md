@@ -2,7 +2,7 @@
 
 Jogo de estratégia por turnos (estilo Axie Infinity) na blockchain Celo.  
 Mobile-first, otimizado para MiniPay (Opera Browser).  
-Pagamentos e recompensas 100% em cUSD.
+Pagamentos e recompensas 100% em USD.
 
 ---
 
