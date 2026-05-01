@@ -20,6 +20,7 @@ import { CHAMPIONS, ChampionClass } from "@/lib/champions";
 import { ACTIVE_CONTRACTS, ARENA_ABI } from "@/lib/contracts";
 import { ChampionArt } from "@/components/ChampionArt";
 import CardHand from "@/components/CardHand";
+import { BattleArenaBackground } from "@/components/BattleArena";
 import { useBattleCards, BattlePhase } from "@/hooks/useBattleCards";
 import { BASE_HP, BASE_SHIELD, TurnLog, CHAMPION_CARDS } from "@/lib/championCards";
 
@@ -273,10 +274,10 @@ export default function BattlePage() {
       </div>
 
       {/* ── VS + Champion art ─────────────────────────────────────────────────── */}
-      <div
-        className="relative px-3 py-4 shrink-0"
-        style={{ background: "radial-gradient(ellipse at 50% 0%, #F6C90E12 0%, transparent 70%)" }}
-      >
+      <div className="relative px-3 py-4 shrink-0 overflow-hidden" style={{ minHeight: 220 }}>
+        {/* Battlefield background */}
+        <BattleArenaBackground classA={classA} classB={classB}/>
+
         {/* VS pill */}
         <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex items-center justify-center z-10 pointer-events-none">
           <div className="px-3 py-1 rounded-full bg-arena-surface border border-arena-border">
@@ -284,13 +285,13 @@ export default function BattlePage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="relative z-10 grid grid-cols-2 gap-2 pt-2">
           {/* Player A */}
           <div className={`flex flex-col items-center gap-1.5 transition-all duration-500 ${
             (phase === "result" && winner === "B") || (isResolved && chainWinner === "B") ? "opacity-40 grayscale" : ""
           }`}>
             <div className={`relative rounded-2xl p-2.5 border ${champA.borderColor}
-              bg-gradient-to-b ${champA.color}
+              bg-black/50 backdrop-blur-sm
               ${(phase === "result" && winner === "A") || (isResolved && chainWinner === "A") ? "ring-2 ring-arena-primary ring-offset-1 ring-offset-arena-bg" : ""}
             `}>
               <ChampionArt class_={classA} size={68} animated={phase === "resolving"} />
@@ -315,7 +316,7 @@ export default function BattlePage() {
             {champB && battle.playerB !== "0x0000000000000000000000000000000000000000" ? (
               <>
                 <div className={`relative rounded-2xl p-2.5 border ${champB.borderColor}
-                  bg-gradient-to-b ${champB.color}
+                  bg-black/50 backdrop-blur-sm
                   ${(phase === "result" && winner === "B") || (isResolved && chainWinner === "B") ? "ring-2 ring-arena-primary ring-offset-1 ring-offset-arena-bg" : ""}
                 `}>
                   <ChampionArt class_={classB} size={68} animated={phase === "resolving"} />

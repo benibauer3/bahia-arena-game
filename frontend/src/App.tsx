@@ -8,6 +8,7 @@ import Arena                                          from "@/pages/Arena";
 import Roster                                         from "@/pages/Roster";
 import Battle                                         from "@/pages/Battle";
 import Leaderboard                                    from "@/pages/Leaderboard";
+import Demo                                           from "@/pages/Demo";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 10_000 } },
@@ -54,6 +55,7 @@ function BottomNav() {
 
   const tabs = [
     { to: "/",            icon: "🏠", label: "Home"      },
+    { to: "/demo",        icon: "🎮", label: "Demo"      },
     { to: "/arena",       icon: "⚔️",  label: "Arena"     },
     { to: "/leaderboard", icon: "🏆", label: "Ranking"   },
     { to: "/roster",      icon: "🐉",  label: "Champions" },
@@ -61,7 +63,7 @@ function BottomNav() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-arena-surface/95 backdrop-blur-sm border-t border-arena-border safe-area-inset-bottom">
-      <div className="grid grid-cols-4 max-w-md mx-auto">
+      <div className="grid grid-cols-5 max-w-md mx-auto">
         {tabs.map((tab) => (
           <a
             key={tab.to}
@@ -96,6 +98,7 @@ function DesktopLayout({ children }: { children: React.ReactNode }) {
         <nav className="flex flex-col gap-2">
           {[
             { to: "/",            icon: "🏠", label: "Home"       },
+            { to: "/demo",        icon: "🎮", label: "Demo"       },
             { to: "/arena",       icon: "⚔️",  label: "Arena"      },
             { to: "/leaderboard", icon: "🏆", label: "Ranking"    },
             { to: "/roster",      icon: "🐉",  label: "Champions"  },
@@ -175,6 +178,7 @@ export default function App() {
           <Route path="/battle/:id"        element={<Battle />}      />
           <Route path="/leaderboard"       element={<Leaderboard />} />
           <Route path="/roster"            element={<Roster />}      />
+          <Route path="/demo"              element={<Demo />}        />
         </Routes>
       </div>
       {viewMode === "mobile" && <BottomNav />}
