@@ -90,12 +90,12 @@ export function useCreateBattle() {
     return { approveTx, stakeWei };
   }
 
-  async function createAfterApproval(classIndex: number, stakeWei: bigint) {
+  async function createAfterApproval(classIndex: number) {
     return create.writeContractAsync({
       address:      ACTIVE_CONTRACTS.ArenaManager,
       abi:          ARENA_ABI,
       functionName: "createBattle",
-      args:         [classIndex, stakeWei],
+      args:         [classIndex],
     });
   }
 

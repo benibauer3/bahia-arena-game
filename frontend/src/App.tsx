@@ -6,6 +6,8 @@ import { wagmiConfig }                                from "@/lib/wagmiConfig";
 import Home                                           from "@/pages/Home";
 import Arena                                          from "@/pages/Arena";
 import Roster                                         from "@/pages/Roster";
+import Battle                                         from "@/pages/Battle";
+import Leaderboard                                    from "@/pages/Leaderboard";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 10_000 } },
@@ -51,14 +53,15 @@ function BottomNav() {
   const path     = location.pathname;
 
   const tabs = [
-    { to: "/",       icon: "🏠", label: "Home"      },
-    { to: "/arena",  icon: "⚔️",  label: "Arena"     },
-    { to: "/roster", icon: "🐉",  label: "Champions" },
+    { to: "/",            icon: "🏠", label: "Home"      },
+    { to: "/arena",       icon: "⚔️",  label: "Arena"     },
+    { to: "/leaderboard", icon: "🏆", label: "Ranking"   },
+    { to: "/roster",      icon: "🐉",  label: "Champions" },
   ];
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-arena-surface/95 backdrop-blur-sm border-t border-arena-border safe-area-inset-bottom">
-      <div className="grid grid-cols-3 max-w-md mx-auto">
+      <div className="grid grid-cols-4 max-w-md mx-auto">
         {tabs.map((tab) => (
           <a
             key={tab.to}
@@ -92,9 +95,10 @@ function DesktopLayout({ children }: { children: React.ReactNode }) {
         </div>
         <nav className="flex flex-col gap-2">
           {[
-            { to: "/",       icon: "🏠", label: "Home"       },
-            { to: "/arena",  icon: "⚔️",  label: "Arena"      },
-            { to: "/roster", icon: "🐉",  label: "Champions"  },
+            { to: "/",            icon: "🏠", label: "Home"       },
+            { to: "/arena",       icon: "⚔️",  label: "Arena"      },
+            { to: "/leaderboard", icon: "🏆", label: "Ranking"    },
+            { to: "/roster",      icon: "🐉",  label: "Champions"  },
           ].map(tab => (
             <a key={tab.to} href={tab.to}
               className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-arena-muted hover:text-white hover:bg-arena-border/50 transition-colors"
@@ -166,9 +170,11 @@ export default function App() {
     <>
       <div className={viewMode === "mobile" ? "pb-16" : ""}>
         <Routes>
-          <Route path="/"       element={<Home />}   />
-          <Route path="/arena"  element={<Arena />}  />
-          <Route path="/roster" element={<Roster />} />
+          <Route path="/"                  element={<Home />}        />
+          <Route path="/arena"             element={<Arena />}       />
+          <Route path="/battle/:id"        element={<Battle />}      />
+          <Route path="/leaderboard"       element={<Leaderboard />} />
+          <Route path="/roster"            element={<Roster />}      />
         </Routes>
       </div>
       {viewMode === "mobile" && <BottomNav />}
