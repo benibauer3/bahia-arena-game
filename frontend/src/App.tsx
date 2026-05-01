@@ -64,20 +64,30 @@ function BottomNav() {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-arena-surface/95 backdrop-blur-sm border-t border-arena-border safe-area-inset-bottom">
       <div className="grid grid-cols-5 max-w-md mx-auto">
-        {tabs.map((tab) => (
-          <a
-            key={tab.to}
-            href={tab.to}
-            className={`
-              flex flex-col items-center gap-0.5 py-2.5 text-xs font-medium
-              ${path === tab.to ? "text-arena-primary" : "text-arena-muted"}
-              active:bg-arena-border/30 transition-colors
-            `}
-          >
-            <span className="text-xl leading-none">{tab.icon}</span>
-            {tab.label}
-          </a>
-        ))}
+        {tabs.map((tab) => {
+          const isDemo   = tab.to === "/demo";
+          const isActive = path === tab.to;
+          return (
+            <a
+              key={tab.to}
+              href={tab.to}
+              className={`
+                relative flex flex-col items-center gap-0.5 py-2.5 text-xs font-medium
+                ${isActive ? "text-arena-primary" : isDemo ? "text-arena-primary/80" : "text-arena-muted"}
+                active:bg-arena-border/30 transition-colors
+              `}
+            >
+              {/* Destaque pulsante para o tab Demo */}
+              {isDemo && !isActive && (
+                <span className="absolute top-1.5 right-3 w-1.5 h-1.5 rounded-full bg-arena-primary animate-ping" />
+              )}
+              <span className={`text-xl leading-none ${isDemo && !isActive ? "drop-shadow-[0_0_6px_rgba(246,201,14,0.8)]" : ""}`}>
+                {tab.icon}
+              </span>
+              {tab.label}
+            </a>
+          );
+        })}
       </div>
     </nav>
   );
