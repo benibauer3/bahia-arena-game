@@ -3,6 +3,10 @@ import { useAccount, useReadContract, useWriteContract } from "wagmi";
 import { Link } from "react-router-dom";
 import { CHAMPIONS, type ChampionDef } from "@/lib/champions";
 import { ACTIVE_CONTRACTS, ARENA_ABI, CHAMPION_ABI, ERC20_ABI } from "@/lib/contracts";
+
+const ZERO = "0x0000000000000000000000000000000000000000";
+/** True only when the smart contracts are actually deployed on-chain */
+const CONTRACTS_LIVE = ACTIVE_CONTRACTS.ArenaManager !== ZERO;
 import ChampionCard from "@/components/ChampionCard";
 import { ChampionArt } from "@/components/ChampionArt";
 import { useRequireCelo } from "@/hooks/useRequireCelo";
@@ -10,7 +14,47 @@ import { activeChain } from "@/lib/wagmiConfig";
 
 // ─── Deposit Widget (3-state) ─────────────────────────────────────────────────
 function DepositWidget() {
-  const { address, isConnected } = useAccount();
+  const { isConnected } = useAccount();
+  const { isCorrectChain, switchToCelo, isSwitching } = useRequireCelo();
+
+  // ── Contracts not yet deployed — show Coming Soon ────────────────────────────
+  if (!CONTRACTS_LIVE) {
+    return (
+      <div className="rounded-2xl bg-arena-surface border border-arena-border p-5 mb-6 text-center">
+        <p className="text-2xl mb-2">🚧</p>
+        <p className="text-sm font-bold text-arena-primary mb-1">On-Chain Deposit — Coming Soon</p>
+        <p className="text-xs text-arena-muted leading-relaxed">
+          Smart contracts are being audited and will launch on Celo Mainnet shortly.
+          Your USDT will earn yield in Aave V3 once live.
+        </p>
+        <div className="mt-3 flex items-center justify-center gap-2 text-xs text-arena-muted">
+          <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse inline-block" />
+          Contract deployment in progress
+        </div>
+      </div>
+    );
+  }
+
+  // ── Wallet not connected ─────────────────────────────────────────────────────
+  if (!isConnected) {
+    return (
+      <div className="rounded-2xl bg-arena-surface border border-arena-border p-5 mb-6 text-center">
+        <p className="text-sm font-semibold mb-3">Connect Wallet to Enter</p>
+        <Link
+          to="/"
+          className="inline-block px-5 py-2.5 rounded-xl bg-arena-primary text-arena-bg font-semibold text-sm active:scale-95 transition-transform"
+        >
+          Connect Wallet
+        </Link>
+      </div>
+    );
+  }
+
+  return <DepositWidgetInner />;
+}
+
+function DepositWidgetInner() {
+  const { address } = useAccount();
   const { isCorrectChain, switchToCelo, isSwitching } = useRequireCelo();
   const [status, setStatus] = useState<
     "idle" | "approving" | "approved" | "depositing" | "done" | "withdrawing" | "error"
@@ -104,21 +148,6 @@ function DepositWidget() {
       setStatus("error");
     }
   };
-
-  // ── State C: not connected ─────────────────────────────────────────────────
-  if (!isConnected) {
-    return (
-      <div className="rounded-2xl bg-arena-surface border border-arena-border p-5 mb-6 text-center">
-        <p className="text-sm font-semibold mb-3">Connect Wallet to Enter</p>
-        <Link
-          to="/"
-          className="inline-block px-5 py-2.5 rounded-xl bg-arena-primary text-arena-bg font-semibold text-sm active:scale-95 transition-transform"
-        >
-          Connect Wallet
-        </Link>
-      </div>
-    );
-  }
 
   // ── Wrong network banner ───────────────────────────────────────────────────
   if (!isCorrectChain) {

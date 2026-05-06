@@ -6,6 +6,9 @@ import { useXAuth } from "@/hooks/useXAuth";
 import { getPlayerMatches } from "@/lib/playerStore";
 import type { MatchRecord } from "@/lib/playerStore";
 import { ACTIVE_CONTRACTS, ARENA_ABI } from "@/lib/contracts";
+
+const ZERO = "0x0000000000000000000000000000000000000000";
+const CONTRACTS_LIVE = ACTIVE_CONTRACTS.ArenaManager !== ZERO;
 import { ChampionArt } from "@/components/ChampionArt";
 import { CHAMPIONS, ChampionClass } from "@/lib/champions";
 import { X_CLIENT_ID } from "@/lib/xAuth";
@@ -408,65 +411,79 @@ export default function Profile() {
       <section className="rounded-2xl bg-arena-surface border border-arena-border p-4 mb-4">
         <p className="text-xs font-semibold uppercase tracking-wider text-arena-muted mb-3">On-Chain Stats</p>
 
-        <div className="grid grid-cols-2 gap-2 mb-4">
-          {/* Rank Points */}
-          <div className="rounded-xl bg-arena-bg border border-arena-border p-3">
-            <p className="text-[10px] text-arena-muted mb-1">Rank Points</p>
-            {rankPts !== undefined
-              ? <p className="text-lg font-bold text-arena-primary">{String(rankPts as bigint)}</p>
-              : <Skeleton className="h-6 w-12" />}
+        {!CONTRACTS_LIVE ? (
+          <div className="text-center py-3">
+            <p className="text-2xl mb-1">🚧</p>
+            <p className="text-xs font-bold text-arena-primary mb-1">On-Chain Features — Coming Soon</p>
+            <p className="text-[10px] text-arena-muted">Smart contracts launching on Celo Mainnet shortly.</p>
           </div>
-          {/* Wins */}
-          <div className="rounded-xl bg-arena-bg border border-arena-border p-3">
-            <p className="text-[10px] text-arena-muted mb-1">Wins</p>
-            {wins !== undefined
-              ? <p className="text-lg font-bold text-arena-success">{String(wins as bigint)}</p>
-              : <Skeleton className="h-6 w-8" />}
-          </div>
-          {/* Losses */}
-          <div className="rounded-xl bg-arena-bg border border-arena-border p-3">
-            <p className="text-[10px] text-arena-muted mb-1">Losses</p>
-            {losses !== undefined
-              ? <p className="text-lg font-bold text-arena-danger">{String(losses as bigint)}</p>
-              : <Skeleton className="h-6 w-8" />}
-          </div>
-          {/* Deposit */}
-          <div className="rounded-xl bg-arena-bg border border-arena-border p-3">
-            <p className="text-[10px] text-arena-muted mb-1">Deposited</p>
-            {depositBal !== undefined
-              ? <p className="text-lg font-bold text-green-400">
-                  {(Number(depositBal as bigint) / 1e6).toFixed(2)} USDT
-                </p>
-              : <Skeleton className="h-6 w-16" />}
-          </div>
-        </div>
-
-        {/* Daily Check-In */}
-        <div className="border-t border-arena-border pt-3">
-          {canCheckIn ? (
-            <button
-              onClick={handleCheckIn}
-              disabled={checkInStatus === "pending"}
-              className="w-full py-2.5 rounded-xl bg-arena-primary text-arena-bg font-semibold text-sm disabled:opacity-50 active:scale-95 transition-transform"
-            >
-              {checkInStatus === "pending" ? "Checking in…" :
-               checkInStatus === "done"    ? "✓ Checked In!" :
-               "✓ Check in for +1 pt"}
-            </button>
-          ) : (
-            <div className="text-center">
-              <p className="text-xs text-arena-muted">Next check-in in</p>
-              <p className="text-sm font-bold text-white">{fmtCountdown(cooldownRem)}</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <div className="rounded-xl bg-arena-bg border border-arena-border p-3">
+                <p className="text-[10px] text-arena-muted mb-1">Rank Points</p>
+                {rankPts !== undefined
+                  ? <p className="text-lg font-bold text-arena-primary">{String(rankPts as bigint)}</p>
+                  : <Skeleton className="h-6 w-12" />}
+              </div>
+              <div className="rounded-xl bg-arena-bg border border-arena-border p-3">
+                <p className="text-[10px] text-arena-muted mb-1">Wins</p>
+                {wins !== undefined
+                  ? <p className="text-lg font-bold text-arena-success">{String(wins as bigint)}</p>
+                  : <Skeleton className="h-6 w-8" />}
+              </div>
+              <div className="rounded-xl bg-arena-bg border border-arena-border p-3">
+                <p className="text-[10px] text-arena-muted mb-1">Losses</p>
+                {losses !== undefined
+                  ? <p className="text-lg font-bold text-arena-danger">{String(losses as bigint)}</p>
+                  : <Skeleton className="h-6 w-8" />}
+              </div>
+              <div className="rounded-xl bg-arena-bg border border-arena-border p-3">
+                <p className="text-[10px] text-arena-muted mb-1">Deposited</p>
+                {depositBal !== undefined
+                  ? <p className="text-lg font-bold text-green-400">
+                      {(Number(depositBal as bigint) / 1e6).toFixed(2)} USDT
+                    </p>
+                  : <Skeleton className="h-6 w-16" />}
+              </div>
             </div>
-          )}
-          {checkInErr && <p className="mt-1 text-xs text-arena-danger text-center">{checkInErr}</p>}
-        </div>
+
+            <div className="border-t border-arena-border pt-3">
+              {canCheckIn ? (
+                <button
+                  onClick={handleCheckIn}
+                  disabled={checkInStatus === "pending"}
+                  className="w-full py-2.5 rounded-xl bg-arena-primary text-arena-bg font-semibold text-sm disabled:opacity-50 active:scale-95 transition-transform"
+                >
+                  {checkInStatus === "pending" ? "Checking in…" :
+                   checkInStatus === "done"    ? "✓ Checked In!" :
+                   "✓ Check in for +1 pt"}
+                </button>
+              ) : (
+                <div className="text-center">
+                  <p className="text-xs text-arena-muted">Next check-in in</p>
+                  <p className="text-sm font-bold text-white">{fmtCountdown(cooldownRem)}</p>
+                </div>
+              )}
+              {checkInErr && <p className="mt-1 text-xs text-arena-danger text-center">{checkInErr}</p>}
+            </div>
+          </>
+        )}
       </section>
 
       {/* ── 6. Monthly Rewards Card ─────────────────────────────────────────── */}
       <section className="rounded-2xl bg-arena-surface border border-arena-border p-4 mb-4">
         <p className="text-xs font-semibold uppercase tracking-wider text-arena-muted mb-3">Monthly Rewards</p>
 
+        {!CONTRACTS_LIVE ? (
+          <div className="text-center py-2">
+            <p className="text-[10px] text-arena-muted">Aave yield pool activates once contracts are deployed.</p>
+            <div className="mt-2 flex items-center justify-center gap-2 text-xs text-arena-muted">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse inline-block" />
+              Coming soon
+            </div>
+          </div>
+        ) : (
         <div className="flex items-center justify-between mb-3">
           <div>
             <p className="text-[10px] text-arena-muted">Total Yield Pool</p>
@@ -489,6 +506,7 @@ export default function Profile() {
         <p className="text-[10px] text-arena-muted text-center">
           Rewards paid directly to your wallet 🔒
         </p>
+        )}
       </section>
 
       {/* ── 7. Match History ────────────────────────────────────────────────── */}
