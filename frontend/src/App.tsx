@@ -1,21 +1,54 @@
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, Link } from "react-router-dom";
 import { WagmiProvider }                              from "wagmi";
 import { QueryClient, QueryClientProvider }           from "@tanstack/react-query";
-import { useState, useEffect }                        from "react";
+import { useState, useEffect, Component }             from "react";
+import type { ReactNode }                             from "react";
+import UsernameModal                                  from "@/components/UsernameModal";
+import { usePlayerProfile }                           from "@/hooks/usePlayerProfile";
+import BahiaArenaLogo                                 from "@/components/BahiaArenaLogo";
 import { wagmiConfig }                                from "@/lib/wagmiConfig";
+import { ViewModeContext, type ViewMode }              from "@/lib/viewModeContext";
 import Home                                           from "@/pages/Home";
 import Arena                                          from "@/pages/Arena";
 import Roster                                         from "@/pages/Roster";
 import Battle                                         from "@/pages/Battle";
 import Leaderboard                                    from "@/pages/Leaderboard";
 import Demo                                           from "@/pages/Demo";
+import PulseRewards                                   from "@/pages/PulseRewards";
+import Profile                                        from "@/pages/Profile";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 10_000 } },
 });
 
+// ─── Error Boundary ───────────────────────────────────────────────────────────
+class PageErrorBoundary extends Component<
+  { children: ReactNode },
+  { error: Error | null }
+> {
+  state = { error: null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-screen bg-arena-bg flex flex-col items-center justify-center gap-4 px-6 text-center">
+          <span className="text-4xl">⚠️</span>
+          <p className="text-white font-semibold">Something went wrong on this page.</p>
+          <p className="text-xs text-arena-muted">{(this.state.error as Error).message}</p>
+          <button
+            onClick={() => this.setState({ error: null })}
+            className="mt-2 px-5 py-2.5 rounded-xl bg-arena-primary text-arena-bg text-sm font-semibold"
+          >
+            Try again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // ─── View toggle (PC / Mobile) ────────────────────────────────────────────────
-type ViewMode = "mobile" | "desktop";
 
 function ViewToggle({ mode, onChange }: { mode: ViewMode; onChange: (m: ViewMode) => void }) {
   return (
@@ -48,17 +81,17 @@ function ViewToggle({ mode, onChange }: { mode: ViewMode; onChange: (m: ViewMode
   );
 }
 
-// ─── Bottom Navigation ────────────────────────────────────────────────────────
+// ─── Bottom Navigation (mobile only) ──────────────────────────────────────────
 function BottomNav() {
   const location = useLocation();
   const path     = location.pathname;
 
   const tabs = [
-    { to: "/",            icon: "🏠", label: "Home"      },
-    { to: "/demo",        icon: "🎮", label: "Demo"      },
-    { to: "/arena",       icon: "⚔️",  label: "Arena"     },
-    { to: "/leaderboard", icon: "🏆", label: "Ranking"   },
-    { to: "/roster",      icon: "🐉",  label: "Champions" },
+    { to: "/",            icon: "🏠", label: "Home"    },
+    { to: "/demo",        icon: "🎮", label: "Demo"    },
+    { to: "/arena",       icon: "⚔️",  label: "Arena"   },
+    { to: "/leaderboard", icon: "🏆", label: "Ranking" },
+    { to: "/profile",     icon: "👤", label: "Profile" },
   ];
 
   return (
@@ -77,11 +110,13 @@ function BottomNav() {
                 active:bg-arena-border/30 transition-colors
               `}
             >
-              {/* Destaque pulsante para o tab Demo */}
               {isDemo && !isActive && (
                 <span className="absolute top-1.5 right-3 w-1.5 h-1.5 rounded-full bg-arena-primary animate-ping" />
               )}
-              <span className={`text-xl leading-none ${isDemo && !isActive ? "drop-shadow-[0_0_6px_rgba(246,201,14,0.8)]" : ""}`}>
+              <span className={`
+                text-xl leading-none
+                ${isDemo && !isActive ? "drop-shadow-[0_0_6px_rgba(246,201,14,0.8)]" : ""}
+              `}>
                 {tab.icon}
               </span>
               {tab.label}
@@ -93,79 +128,104 @@ function BottomNav() {
   );
 }
 
-// ─── Desktop layout wrapper ────────────────────────────────────────────────────
+// ─── Sidebar Nav (desktop only) ───────────────────────────────────────────────
+function SidebarNav() {
+  const location = useLocation();
+  const path     = location.pathname;
+
+  const items = [
+    { to: "/",            icon: "🏠", label: "Home"      },
+    { to: "/demo",        icon: "🎮", label: "Demo"      },
+    { to: "/arena",       icon: "⚔️",  label: "Arena"     },
+    { to: "/leaderboard", icon: "🏆", label: "Ranking"   },
+    { to: "/roster",      icon: "🐉",  label: "Champions" },
+    { to: "/pulse",       icon: "⚡", label: "Rewards"   },
+    { to: "/profile",     icon: "👤", label: "Profile"   },
+  ];
+
+  return (
+    <aside className="
+      fixed top-0 left-0 z-40
+      w-64 h-screen flex flex-col
+      border-r border-arena-border bg-[#080c14]
+      p-6 shrink-0 overflow-y-auto
+    ">
+      {/* Logo */}
+      <div className="flex justify-center mb-8">
+        <BahiaArenaLogo size={130} showWordmark={true} />
+      </div>
+
+      {/* Nav links */}
+      <nav className="flex flex-col gap-1">
+        {items.map(item => {
+          const isActive = path === item.to;
+          const isPulse  = item.to === "/pulse";
+          const isDemo   = item.to === "/demo";
+          return (
+            <Link
+              key={item.to}
+              to={item.to}
+              className={`
+                relative flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all
+                ${isActive
+                  ? isPulse
+                    ? "bg-green-400/10 text-green-400 border border-green-400/25"
+                    : "bg-arena-primary/12 text-arena-primary border border-arena-primary/25"
+                  : "text-arena-muted hover:text-white hover:bg-white/5 border border-transparent"}
+              `}
+            >
+              {/* Pulse dot for demo & pulse when inactive */}
+              {(isDemo || isPulse) && !isActive && (
+                <span className={`
+                  absolute top-2.5 right-3 w-1.5 h-1.5 rounded-full animate-ping
+                  ${isPulse ? "bg-green-400" : "bg-arena-primary"}
+                `}/>
+              )}
+              <span className="text-lg leading-none">{item.icon}</span>
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* Network badge */}
+      <div className="mt-auto pt-4 border-t border-arena-border">
+        <div className="flex items-center gap-2 text-xs text-arena-muted">
+          <div className="w-2 h-2 rounded-full bg-arena-success animate-pulse" />
+          Celo Network
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+// ─── Desktop Layout — full screen ─────────────────────────────────────────────
 function DesktopLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#070a10] flex">
-      {/* Left sidebar */}
-      <aside className="hidden lg:flex flex-col w-64 border-r border-arena-border bg-arena-surface/30 p-6 shrink-0">
-        <div className="flex items-center gap-3 mb-8">
-          <span className="text-3xl">🏟️</span>
-          <div>
-            <p className="font-display text-arena-primary text-xs leading-tight">BAHIA<br />ARENA</p>
-          </div>
-        </div>
-        <nav className="flex flex-col gap-2">
-          {[
-            { to: "/",            icon: "🏠", label: "Home"       },
-            { to: "/demo",        icon: "🎮", label: "Demo"       },
-            { to: "/arena",       icon: "⚔️",  label: "Arena"      },
-            { to: "/leaderboard", icon: "🏆", label: "Ranking"    },
-            { to: "/roster",      icon: "🐉",  label: "Champions"  },
-          ].map(tab => (
-            <a key={tab.to} href={tab.to}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-arena-muted hover:text-white hover:bg-arena-border/50 transition-colors"
-            >
-              <span className="text-lg">{tab.icon}</span>{tab.label}
-            </a>
-          ))}
-        </nav>
-        {/* Network badge */}
-        <div className="mt-auto pt-4 border-t border-arena-border">
-          <div className="flex items-center gap-2 text-xs text-arena-muted">
-            <div className="w-2 h-2 rounded-full bg-arena-success animate-pulse" />
-            Celo Network
-          </div>
-        </div>
-      </aside>
-
-      {/* Center — phone frame */}
-      <main className="flex-1 flex items-start justify-center py-8 px-4">
-        <div className="
-          w-full max-w-sm bg-arena-bg rounded-3xl overflow-hidden
-          shadow-2xl shadow-black/60
-          border border-arena-border/60
-          ring-1 ring-white/5
-          min-h-[700px] relative
-        ">
-          {children}
-        </div>
+    <div className="flex min-h-screen bg-[#070a10]">
+      <SidebarNav />
+      {/* Content offset by sidebar width */}
+      <main className="flex-1 ml-64 min-h-screen overflow-y-auto">
+        {children}
       </main>
-
-      {/* Right panel — champion quick-ref */}
-      <aside className="hidden xl:flex flex-col w-72 border-l border-arena-border bg-arena-surface/30 p-6 shrink-0 gap-4">
-        <p className="text-xs font-semibold text-arena-muted uppercase tracking-wider">Champions</p>
-        {[
-          { name: "Curupira", role: "Tank",     emoji: "🦶", color: "text-green-400"  },
-          { name: "Iara",     role: "Support",  emoji: "🧜‍♀️", color: "text-cyan-400"   },
-          { name: "Boitatá",  role: "DPS/DoT",  emoji: "🐍", color: "text-orange-400" },
-          { name: "Anhangá",  role: "Assassin", emoji: "💀", color: "text-purple-400" },
-          { name: "Tupã",     role: "Mage",     emoji: "⚡", color: "text-yellow-400" },
-        ].map(c => (
-          <div key={c.name} className="flex items-center gap-3">
-            <span className="text-2xl">{c.emoji}</span>
-            <div>
-              <p className={`text-sm font-semibold ${c.color}`}>{c.name}</p>
-              <p className="text-xs text-arena-muted">{c.role}</p>
-            </div>
-          </div>
-        ))}
-        <div className="mt-auto pt-4 border-t border-arena-border">
-          <p className="text-xs text-arena-muted">Entry Fee: <span className="text-arena-primary font-semibold">1 USDT</span></p>
-          <p className="text-xs text-arena-muted">Protocol Fee: <span className="text-white font-semibold">2%</span></p>
-        </div>
-      </aside>
     </div>
+  );
+}
+
+// ─── Profile Gate ─────────────────────────────────────────────────────────────
+function ProfileGate({ children }: { children: React.ReactNode }) {
+  const { needsSetup } = usePlayerProfile();
+  const [showModal, setShowModal] = useState(false);
+
+  useEffect(() => {
+    if (needsSetup) setShowModal(true);
+  }, [needsSetup]);
+
+  return (
+    <>
+      {children}
+      {showModal && <UsernameModal onClose={() => setShowModal(false)} />}
+    </>
   );
 }
 
@@ -179,36 +239,44 @@ export default function App() {
     localStorage.setItem("bahia-view", viewMode);
   }, [viewMode]);
 
-  const content = (
-    <>
-      <div className={viewMode === "mobile" ? "pb-16" : ""}>
-        <Routes>
-          <Route path="/"                  element={<Home />}        />
-          <Route path="/arena"             element={<Arena />}       />
-          <Route path="/battle/:id"        element={<Battle />}      />
-          <Route path="/leaderboard"       element={<Leaderboard />} />
-          <Route path="/roster"            element={<Roster />}      />
-          <Route path="/demo"              element={<Demo />}        />
-        </Routes>
-      </div>
-      {viewMode === "mobile" && <BottomNav />}
-    </>
+  const routes = (
+    <PageErrorBoundary>
+      <Routes>
+        <Route path="/"            element={<Home />}         />
+        <Route path="/arena"       element={<Arena />}        />
+        <Route path="/battle/:id"  element={<Battle />}       />
+        <Route path="/leaderboard" element={<Leaderboard />}  />
+        <Route path="/roster"      element={<Roster />}       />
+        <Route path="/demo"        element={<Demo />}         />
+        <Route path="/pulse"       element={<PulseRewards />} />
+        <Route path="/profile"     element={<Profile />}      />
+      </Routes>
+    </PageErrorBoundary>
   );
 
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
-          {/* PC / Mobile toggle — always visible */}
-          <ViewToggle mode={viewMode} onChange={setViewMode} />
+          <ViewModeContext.Provider value={viewMode}>
+            <ProfileGate>
+              {/* View toggle — always visible */}
+              <ViewToggle mode={viewMode} onChange={setViewMode} />
 
-          {viewMode === "mobile" ? (
-            <div className="max-w-md mx-auto relative">
-              {content}
-            </div>
-          ) : (
-            <DesktopLayout>{content}</DesktopLayout>
-          )}
+              {viewMode === "mobile" ? (
+                /* ── MOBILE: narrow centered layout with bottom nav ── */
+                <div className="max-w-md mx-auto relative">
+                  <div className="pb-16">{routes}</div>
+                  <BottomNav />
+                </div>
+              ) : (
+                /* ── DESKTOP: full-screen with sidebar ── */
+                <DesktopLayout>
+                  {routes}
+                </DesktopLayout>
+              )}
+            </ProfileGate>
+          </ViewModeContext.Provider>
         </BrowserRouter>
       </QueryClientProvider>
     </WagmiProvider>

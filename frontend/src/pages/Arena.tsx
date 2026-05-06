@@ -2,9 +2,10 @@ import { useState } from "react";
 import { useAccount, useReadContract, useWriteContract } from "wagmi";
 import { Link, useNavigate } from "react-router-dom";
 import { CHAMPIONS, ChampionClass } from "@/lib/champions";
-import { ACTIVE_CONTRACTS, ARENA_ABI, CHAMPION_ABI } from "@/lib/contracts";
+import { ACTIVE_CONTRACTS, ARENA_ABI } from "@/lib/contracts";
 import { ChampionArt } from "@/components/ChampionArt";
 import ChampionCard from "@/components/ChampionCard";
+import DepositGateSheet from "@/components/DepositGateSheet";
 
 interface Battle {
   playerA: `0x${string}`; playerB: `0x${string}`;
@@ -268,6 +269,7 @@ export default function Arena() {
   const { address, isConnected } = useAccount();
   const [showCreate, setShowCreate]       = useState(false);
   const [joiningBattle, setJoiningBattle] = useState<{ id: bigint; battle: Battle } | null>(null);
+  const [showGate, setShowGate]           = useState(false);
 
   const { data: openData, refetch } = useReadContract({
     address: ACTIVE_CONTRACTS.ArenaManager,
@@ -277,15 +279,15 @@ export default function Arena() {
     query: { refetchInterval: 8_000 },
   });
 
-  const { data: hasSet } = useReadContract({
-    address: ACTIVE_CONTRACTS.BahiaChampion,
-    abi: CHAMPION_ABI,
-    functionName: "hasChampionSet",
+  // Gate: player must have an active deposit to create or join battles
+  const { data: hasDeposit } = useReadContract({
+    address: ACTIVE_CONTRACTS.ArenaManager,
+    abi: ARENA_ABI,
+    functionName: "hasDeposit",
     args: address ? [address] : undefined,
-    query: { enabled: !!address },
+    query: { enabled: !!address, refetchInterval: 10_000 },
   });
 
-  // Also fetch active battles (to show "Go to Battle" for user's active battles)
   const { data: activeBattleId } = useReadContract({
     address: ACTIVE_CONTRACTS.ArenaManager,
     abi: ARENA_ABI,
@@ -295,6 +297,12 @@ export default function Arena() {
   });
 
   const myActiveBattleId = activeBattleId ? (activeBattleId as bigint) - 1n : null;
+  const canPlay          = isConnected && !!hasDeposit;
+
+  // Intercept PvP actions — show gate if no deposit
+  const guardedCreate = () => canPlay ? setShowCreate(true)   : setShowGate(true);
+  const guardedJoin   = (id: bigint, battle: Battle) =>
+    canPlay ? setJoiningBattle({ id, battle }) : setShowGate(true);
 
   const battles = openData
     ? { list: (openData as any)[0] as Battle[], ids: (openData as any)[1] as bigint[] }
@@ -316,23 +324,41 @@ export default function Arena() {
             className="px-2.5 py-1.5 rounded-xl bg-arena-surface border border-arena-border text-xs font-semibold active:scale-95 transition-transform">
             🏆 Rank
           </Link>
-          {isConnected && hasSet && (
+          {/* Always show "+ Battle" — gate is handled on click */}
+          {isConnected && (
             <button
-              onClick={() => setShowCreate(true)}
-              className="px-3 py-1.5 rounded-xl bg-arena-accent text-white text-xs font-semibold active:scale-95 transition-transform"
+              onClick={guardedCreate}
+              className="px-3 py-1.5 rounded-xl bg-arena-accent text-white text-xs font-semibold active:scale-95 transition-transform flex items-center gap-1"
             >
+              {!canPlay && <span className="text-[10px]">🔒</span>}
               + Battle
             </button>
           )}
         </div>
       </div>
 
-      {/* No champions banner */}
-      {!hasSet && isConnected && (
-        <div className="rounded-2xl bg-arena-surface border border-amber-500/30 p-4 mb-4 text-center">
-          <p className="text-sm text-amber-400 font-semibold mb-1">No active champions</p>
-          <p className="text-xs text-arena-muted mb-2">Deposit 1 USDT to receive your 5 champions & join the yield pool.</p>
-          <Link to="/roster" className="text-arena-primary underline text-xs">Get Champions →</Link>
+      {/* Deposit gate banner — shown when connected but no deposit */}
+      {isConnected && !hasDeposit && (
+        <button
+          onClick={() => setShowGate(true)}
+          className="w-full rounded-2xl bg-arena-primary/8 border border-arena-primary/25 p-4 mb-4 text-left active:scale-[0.99] transition-transform"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🔒</span>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-arena-primary">Desbloqueie o PvP</p>
+              <p className="text-xs text-arena-muted">Deposite 1 USDT para jogar batalhas reais — você pode navegar e ver tudo agora</p>
+            </div>
+            <span className="text-arena-primary text-lg">→</span>
+          </div>
+        </button>
+      )}
+
+      {/* Connected + has deposit — green status badge */}
+      {canPlay && (
+        <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-xl bg-arena-success/10 border border-arena-success/20">
+          <div className="w-2 h-2 rounded-full bg-arena-success animate-pulse" />
+          <p className="text-xs text-arena-success font-medium">PvP desbloqueado · 1 USDT earning in Aave</p>
         </div>
       )}
 
@@ -365,15 +391,14 @@ export default function Arena() {
       {!battles || battles.ids.length === 0 ? (
         <div className="flex flex-col items-center justify-center flex-1 gap-4 text-center py-16">
           <span className="text-5xl">🏜️</span>
-          <p className="text-arena-muted text-sm">No open battles right now.</p>
-          {hasSet && (
-            <button
-              onClick={() => setShowCreate(true)}
-              className="px-5 py-3 rounded-xl bg-arena-primary text-arena-bg font-semibold text-sm active:scale-95 transition-transform"
-            >
-              Create the first battle
-            </button>
-          )}
+          <p className="text-arena-muted text-sm">Nenhuma batalha aberta no momento.</p>
+          <button
+            onClick={guardedCreate}
+            className="px-5 py-3 rounded-xl bg-arena-primary text-arena-bg font-semibold text-sm active:scale-95 transition-transform flex items-center gap-2"
+          >
+            {!canPlay && <span>🔒</span>}
+            Criar a primeira batalha
+          </button>
         </div>
       ) : (
         <div className="flex flex-col gap-3">
@@ -386,7 +411,7 @@ export default function Arena() {
               battleId={id}
               battle={battles.list[i]}
               myAddress={address}
-              onJoin={(bid) => setJoiningBattle({ id: bid, battle: battles.list[i] })}
+              onJoin={(bid) => guardedJoin(bid, battles.list[i])}
             />
           ))}
         </div>
@@ -403,6 +428,7 @@ export default function Arena() {
           onJoined={() => refetch()}
         />
       )}
+      {showGate && <DepositGateSheet onClose={() => setShowGate(false)} />}
     </div>
   );
 }

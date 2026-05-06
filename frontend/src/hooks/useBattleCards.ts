@@ -25,6 +25,8 @@ import {
 } from "@/lib/championCards";
 import { ChampionClass } from "@/lib/champions";
 
+export type Difficulty = "easy" | "medium" | "hard";
+
 // ─── Phase Types ──────────────────────────────────────────────────────────────
 
 export type BattlePhase =
@@ -73,6 +75,7 @@ export function useBattleCards(
   classA: ChampionClass,
   classB: ChampionClass,
   autoOpponent: boolean = true,
+  difficulty: Difficulty = "medium",
 ): UseBattleCardsReturn {
   const configA = CHAMPION_CARDS[classA];
   const configB = CHAMPION_CARDS[classB];
@@ -133,20 +136,66 @@ export function useBattleCards(
     [phase, battleState, configA],
   );
 
-  // ── AI card picker ───────────────────────────────────────────────────────────
+  // ── AI card picker (difficulty-aware) ────────────────────────────────────────
   function pickOpponentCards(state: BattleState): number[] {
     if (state.statusB === "stunned") return [];
-    const maxCards = state.statusB === "halfTurn" ? 1 : 2;
+
+    const statusMax = state.statusB === "halfTurn" ? 1 : 2;
+    // Easy: AI limited to 1 card; Hard: always uses max allowed
+    const maxCards = difficulty === "easy" ? 1 : statusMax;
+
     const available = configB.cards.filter(
       (c) => c.energyCost === 0 || state.energyB >= c.energyCost,
     );
     const ultimates = available.filter((c) => c.energyCost > 0);
     const basics    = available.filter((c) => c.energyCost === 0);
 
+    // Easy: never uses ultimates, random basic selection
+    if (difficulty === "easy") {
+      const shuffled = [...basics].sort(() => Math.random() - 0.5);
+      return shuffled.slice(0, 1).map(c => c.id);
+    }
+
     const picks: number[] = [];
-    if (ultimates.length > 0 && state.energyB >= 3) {
+    const energyThreshold = difficulty === "hard" ? 2 : 3; // Hard uses ult earlier
+
+    if (ultimates.length > 0 && state.energyB >= energyThreshold) {
       picks.push(ultimates[0].id);
+    } else if (difficulty === "hard") {
+      // Hard AI — tactical prioritisation
+      const sumFn = (c: typeof basics[0]) =>
+        c.effects.reduce((s, e) => s + Math.max(0, e.value), 0);
+      const dmgFn = (c: typeof basics[0]) =>
+        c.effects.filter(e => e.type === "damage" || e.type === "shieldPierce")
+          .reduce((s, e) => s + e.value, 0);
+      const healFn = (c: typeof basics[0]) =>
+        c.effects.filter(e => e.type === "heal").reduce((s, e) => s + e.value, 0);
+      const shieldFn = (c: typeof basics[0]) =>
+        c.effects.filter(e => e.type === "shield").reduce((s, e) => s + e.value, 0);
+
+      // Priority: heal if critically low, shield if unprotected, else max damage
+      const healer  = [...basics].filter(c => healFn(c) > 0).sort((a,b) => healFn(b)-healFn(a))[0];
+      const shielder = [...basics].filter(c => shieldFn(c) > 0).sort((a,b) => shieldFn(b)-shieldFn(a))[0];
+      const attacker = [...basics].sort((a,b) => dmgFn(b)-dmgFn(a));
+
+      if (healer && state.hpB < 35) {
+        picks.push(healer.id);
+      } else if (shielder && state.shieldB < 15) {
+        picks.push(shielder.id);
+      } else {
+        for (const c of attacker) {
+          if (picks.length >= maxCards) break;
+          if (!picks.includes(c.id)) picks.push(c.id);
+        }
+      }
+      // Fill remaining slots with best remaining cards
+      const sorted = [...basics].sort((a,b) => sumFn(b)-sumFn(a));
+      for (const c of sorted) {
+        if (picks.length >= maxCards) break;
+        if (!picks.includes(c.id)) picks.push(c.id);
+      }
     } else {
+      // Medium (current): sort by total effect value
       const sorted = [...basics].sort((a, b) => {
         const sumFn = (c: typeof a) =>
           c.effects.reduce((s, e) => s + Math.max(0, e.value), 0);

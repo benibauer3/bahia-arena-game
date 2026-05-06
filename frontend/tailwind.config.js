@@ -4,13 +4,12 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Bahia Arena palette – vibrant tropics meets neon Web3
         arena: {
           bg:       "#0D1117",
           surface:  "#161B22",
           border:   "#21262D",
-          primary:  "#F6C90E",  // golden yellow
-          accent:   "#FF6B35",  // sunset orange
+          primary:  "#F6C90E",
+          accent:   "#FF6B35",
           success:  "#3FB950",
           danger:   "#F85149",
           info:     "#58A6FF",
@@ -29,12 +28,30 @@ export default {
         body:    ["'Inter'", "sans-serif"],
       },
       animation: {
-        "pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
-        "shake":      "shake 0.5s ease-in-out",
-        "float":      "float 3s ease-in-out infinite",
-        "glow":       "glow 2s ease-in-out infinite",
+        // ── existing ────────────────────────────────────────
+        "pulse-slow":  "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+        "shake":       "shake 0.5s ease-in-out",
+        "float":       "float 3s ease-in-out infinite",
+        "glow":        "glow 2s ease-in-out infinite",
+        // ── combat ──────────────────────────────────────────
+        "float-up":        "floatUp 0.9s ease-out forwards",
+        "shake-hit":       "shakeHit 0.45s ease-in-out",
+        "flash-red":       "flashRed 0.4s ease-in-out",
+        "flash-cyan":      "flashCyan 0.4s ease-in-out",
+        "flash-gold":      "flashGold 0.6s ease-in-out",
+        "flash-green":     "flashGreen 0.4s ease-in-out",
+        "pop-in":          "popIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards",
+        "card-fly":        "cardFly 0.4s ease-in forwards",
+        "card-select":     "cardSelect 0.2s ease-out forwards",
+        "victory-pulse":   "victoryPulse 0.8s ease-in-out infinite",
+        "defeat-shake":    "defeatShake 0.6s ease-in-out",
+        "status-pop":      "statusPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards",
+        "energy-fill":     "energyFill 0.3s ease-out forwards",
+        "screen-flash":    "screenFlash 0.5s ease-in-out",
+        "ultimate-burst":  "ultimateBurst 0.7s ease-out",
       },
       keyframes: {
+        // ── existing ──
         shake: {
           "0%, 100%": { transform: "translateX(0)" },
           "25%":      { transform: "translateX(-8px)" },
@@ -47,6 +64,87 @@ export default {
         glow: {
           "0%, 100%": { boxShadow: "0 0 5px #F6C90E40" },
           "50%":      { boxShadow: "0 0 20px #F6C90ECC" },
+        },
+        // ── combat ──
+        floatUp: {
+          "0%":   { transform: "translateY(0) scale(1)",    opacity: "1" },
+          "30%":  { transform: "translateY(-18px) scale(1.15)", opacity: "1" },
+          "70%":  { transform: "translateY(-40px) scale(1.05)", opacity: "0.8" },
+          "100%": { transform: "translateY(-60px) scale(0.9)",  opacity: "0" },
+        },
+        shakeHit: {
+          "0%":   { transform: "translateX(0) rotate(0deg)" },
+          "15%":  { transform: "translateX(-7px) rotate(-2deg)" },
+          "30%":  { transform: "translateX(7px) rotate(2deg)" },
+          "45%":  { transform: "translateX(-5px) rotate(-1deg)" },
+          "60%":  { transform: "translateX(5px) rotate(1deg)" },
+          "75%":  { transform: "translateX(-2px)" },
+          "100%": { transform: "translateX(0) rotate(0deg)" },
+        },
+        flashRed: {
+          "0%, 100%": { boxShadow: "0 0 0 rgba(248,81,73,0)",   filter: "brightness(1)" },
+          "40%":      { boxShadow: "0 0 24px rgba(248,81,73,0.9)", filter: "brightness(1.4)" },
+        },
+        flashCyan: {
+          "0%, 100%": { boxShadow: "0 0 0 rgba(34,211,238,0)",   filter: "brightness(1)" },
+          "40%":      { boxShadow: "0 0 24px rgba(34,211,238,0.9)", filter: "brightness(1.3)" },
+        },
+        flashGold: {
+          "0%, 100%": { boxShadow: "0 0 0 rgba(246,201,14,0)",   filter: "brightness(1)" },
+          "30%":      { boxShadow: "0 0 32px rgba(246,201,14,1)", filter: "brightness(1.6)" },
+          "60%":      { boxShadow: "0 0 48px rgba(246,201,14,0.8)", filter: "brightness(1.4)" },
+        },
+        flashGreen: {
+          "0%, 100%": { boxShadow: "0 0 0 rgba(63,185,80,0)",   filter: "brightness(1)" },
+          "40%":      { boxShadow: "0 0 24px rgba(63,185,80,0.9)", filter: "brightness(1.4)" },
+        },
+        popIn: {
+          "0%":   { transform: "scale(0) rotate(-15deg)", opacity: "0" },
+          "65%":  { transform: "scale(1.2) rotate(5deg)",  opacity: "1" },
+          "100%": { transform: "scale(1) rotate(0deg)",    opacity: "1" },
+        },
+        cardFly: {
+          "0%":   { transform: "translateY(0) scale(1)",    opacity: "1" },
+          "50%":  { transform: "translateY(-30px) scale(1.1)", opacity: "0.8" },
+          "100%": { transform: "translateY(-80px) scale(0.7)",  opacity: "0" },
+        },
+        cardSelect: {
+          "0%":   { transform: "translateY(0)" },
+          "50%":  { transform: "translateY(-10px)" },
+          "100%": { transform: "translateY(-8px)" },
+        },
+        victoryPulse: {
+          "0%, 100%": { transform: "scale(1)",    filter: "brightness(1) drop-shadow(0 0 0 transparent)" },
+          "50%":      { transform: "scale(1.06)", filter: "brightness(1.35) drop-shadow(0 0 16px #F6C90E)" },
+        },
+        defeatShake: {
+          "0%":   { transform: "translateX(0) rotate(0)" },
+          "10%":  { transform: "translateX(-10px) rotate(-3deg)" },
+          "30%":  { transform: "translateX(10px) rotate(3deg)" },
+          "50%":  { transform: "translateX(-8px) rotate(-2deg)" },
+          "70%":  { transform: "translateX(8px) rotate(2deg)" },
+          "85%":  { transform: "translateX(-3px)" },
+          "100%": { transform: "translateX(0) rotate(0)" },
+        },
+        statusPop: {
+          "0%":   { transform: "scale(0) translateY(4px)", opacity: "0" },
+          "60%":  { transform: "scale(1.3) translateY(-2px)", opacity: "1" },
+          "100%": { transform: "scale(1) translateY(0)",      opacity: "1" },
+        },
+        energyFill: {
+          "0%":   { transform: "scaleX(0)", opacity: "0.5" },
+          "100%": { transform: "scaleX(1)", opacity: "1" },
+        },
+        screenFlash: {
+          "0%, 100%": { opacity: "0" },
+          "20%":      { opacity: "0.15" },
+          "50%":      { opacity: "0.08" },
+        },
+        ultimateBurst: {
+          "0%":   { transform: "scale(0.8)", opacity: "0.9" },
+          "40%":  { transform: "scale(1.15)", opacity: "1" },
+          "70%":  { transform: "scale(1.05)", opacity: "0.9" },
+          "100%": { transform: "scale(1)",    opacity: "1" },
         },
       },
     },

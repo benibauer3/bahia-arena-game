@@ -7,12 +7,17 @@
     "test": "hardhat test",
     "deploy:alfajores": "hardhat run scripts/deploy.js --network alfajores",
     "deploy:celo": "hardhat run scripts/deploy.js --network celo",
+    "deploy:alfajores:ts": "hardhat run scripts/deploy.ts --network alfajores",
+    "deploy:celo:ts": "hardhat run scripts/deploy.ts --network celo",
     "node": "hardhat node"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "hardhat": "^2.22.3",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5",
+    "@types/node": "^20.12.7"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.0.2"

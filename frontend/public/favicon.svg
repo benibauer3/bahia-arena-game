@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#0A2A6E"/>
+      <stop offset="60%"  stop-color="#061A4A"/>
+      <stop offset="100%" stop-color="#042A0C"/>
+    </linearGradient>
+    <linearGradient id="bolt" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#00FF88"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Shield fill -->
+  <path d="M50,2 L93,6 L97,11 L97,60 Q97,68 91,74 Q72,88 50,96 Q28,88 9,74 Q3,68 3,60 L3,11 L7,6 Z"
+        fill="url(#bg)"/>
+
+  <!-- Left lightning bolt -->
+  <path d="M43,18 L36,18 L33,40 L40,40 L31,62 L41,43 L43,18 Z"
+        fill="url(#bolt)"/>
+
+  <!-- Right lightning bolt (mirrored) -->
+  <path d="M57,18 L64,18 L67,40 L60,40 L69,62 L59,43 L57,18 Z"
+        fill="url(#bolt)"/>
+
+  <!-- Neon ground line -->
+  <line x1="10" y1="78" x2="90" y2="78" stroke="#00FF88" stroke-width="2"/>
+
+  <!-- Ground nodes -->
+  <circle cx="10" cy="78" r="2.5" fill="#00FF88"/>
+  <circle cx="50" cy="78" r="2"   fill="#00FF88"/>
+  <circle cx="90" cy="78" r="2.5" fill="#00FF88"/>
+
+  <!-- Shield outer border: white -->
+  <path d="M50,2 L93,6 L97,11 L97,60 Q97,68 91,74 Q72,88 50,96 Q28,88 9,74 Q3,68 3,60 L3,11 L7,6 Z"
+        fill="none" stroke="white" stroke-width="2"/>
+
+  <!-- Shield inner border: emerald -->
+  <path d="M50,5 L90,9 L93,13 L93,60 Q93,67 88,72 Q70,85 50,93 Q30,85 12,72 Q7,67 7,60 L7,13 L10,9 Z"
+        fill="none" stroke="#00A86B" stroke-width="1.2"/>
+</svg>

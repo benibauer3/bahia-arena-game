@@ -59,7 +59,7 @@ function CardTile({ card, isSelected, isDisabled, onTap }: CardTileProps) {
         transition-all duration-200 active:scale-95
         bg-gradient-to-b ${card.gradientFrom} ${card.gradientTo}
         ${isSelected
-          ? `${card.borderColor} ring-2 ring-offset-1 ring-offset-arena-bg ${card.borderColor.replace("border-", "ring-")} scale-[1.04] shadow-lg`
+          ? `${card.borderColor} ring-2 ring-offset-1 ring-offset-arena-bg ${card.borderColor.replace("border-", "ring-")} -translate-y-2 shadow-xl shadow-black/50`
           : "border-white/10 opacity-90"
         }
         ${isDisabled && !isSelected ? "opacity-40 grayscale cursor-not-allowed" : "cursor-pointer"}

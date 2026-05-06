@@ -2,149 +2,282 @@
  * Demo.tsx — Batalha demo completa, sem carteira.
  *
  * Fluxo:
- *  1. Seletor de campeão (com arte + arena de fundo em cada card)
- *  2. Batalha de cartas completa contra IA
- *  3. Resultado + CTAs para Arena real
+ *  1. ChampionPicker  — escolha seu campeão
+ *  2. SetupScreen     — escolha dificuldade + arena
+ *  3. BattleScreen    — batalha contra IA
  */
 
-import { useState, useRef, useEffect } from "react";
-import { Link }                        from "react-router-dom";
-import { CHAMPIONS, ChampionClass }    from "@/lib/champions";
-import { ChampionArt }                 from "@/components/ChampionArt";
-import CardHand                        from "@/components/CardHand";
-import { BattleArenaBackground }       from "@/components/BattleArena";
-import { useBattleCards }              from "@/hooks/useBattleCards";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Link }                         from "react-router-dom";
+import { CHAMPIONS, ChampionClass }     from "@/lib/champions";
+import { ChampionArt }                  from "@/components/ChampionArt";
+import CardHand                         from "@/components/CardHand";
+import { BattleArenaBackground, ArenaTheme } from "@/components/BattleArena";
+import FloatingCombatText, { FloatItem } from "@/components/FloatingCombatText";
+import { useBattleCards, Difficulty }   from "@/hooks/useBattleCards";
 import { CHAMPION_CARDS, BASE_HP, BASE_SHIELD, type TurnLog } from "@/lib/championCards";
+import BahiaArenaLogo                   from "@/components/BahiaArenaLogo";
+import { usePlayerProfile }             from "@/hooks/usePlayerProfile";
 
-// ─── HP + Shield bars ─────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-function StatBars({ hp, shield, side }: { hp: number; shield: number; side: "A" | "B" }) {
+type FlashType = "hit" | "heal" | "shield" | "ultimate" | null;
+
+function flashClass(f: FlashType): string {
+  if (!f) return "";
+  return f === "hit"    ? "animate-flash-red"  :
+         f === "heal"   ? "animate-flash-green" :
+         f === "shield" ? "animate-flash-cyan"  :
+                          "animate-flash-gold";
+}
+
+// ─── Champion HUD ─────────────────────────────────────────────────────────────
+
+function ChampionHud({
+  label, labelColor, name, hp, shield,
+}: { label: string; labelColor: string; name: string; hp: number; shield: number }) {
   const hpPct = Math.max(0, Math.min(100, (hp     / BASE_HP)     * 100));
   const shPct = Math.max(0, Math.min(100, (shield / BASE_SHIELD) * 100));
-  const hpColor = hpPct > 50 ? "bg-emerald-500" : hpPct > 25 ? "bg-amber-400" : "bg-red-500";
-  const align   = side === "B" ? "items-end" : "items-start";
+  const hpCol = hpPct > 50 ? "bg-emerald-500" : hpPct > 25 ? "bg-amber-400" : "bg-red-500";
 
   return (
-    <div className={`flex flex-col gap-0.5 ${align}`}>
-      <div className="flex items-center gap-1">
-        <span className="text-[9px]">❤️</span>
-        <span className="text-xs font-bold tabular-nums text-white">{hp}</span>
-      </div>
-      <div className="w-24 h-2 rounded-full bg-black/50 overflow-hidden">
-        <div className={`h-full rounded-full transition-all duration-500 ${hpColor}`} style={{ width: `${hpPct}%` }} />
+    <div className="bg-black/80 backdrop-blur-sm rounded-xl px-2.5 py-1.5 min-w-[112px] max-w-[132px]">
+      <div className="flex items-center justify-between gap-1 mb-1">
+        <span className={`text-[8px] font-bold uppercase tracking-wide ${labelColor}`}>{label}</span>
+        <span className="text-[9px] font-semibold text-white truncate">{name}</span>
       </div>
       <div className="flex items-center gap-1">
-        <span className="text-[9px]">🛡️</span>
-        <span className="text-xs font-bold tabular-nums text-cyan-300">{shield}</span>
+        <span className="text-[8px]">❤️</span>
+        <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+          <div className={`h-full rounded-full transition-all duration-500 ${hpCol}`} style={{ width: `${hpPct}%` }} />
+        </div>
+        <span className="text-[8px] tabular-nums text-white/80 w-6 text-right">{hp}</span>
       </div>
-      <div className="w-24 h-1.5 rounded-full bg-black/50 overflow-hidden">
-        <div className="h-full rounded-full transition-all duration-500 bg-cyan-500" style={{ width: `${shPct}%` }} />
+      <div className="flex items-center gap-1 mt-0.5">
+        <span className="text-[8px]">🛡️</span>
+        <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
+          <div className="h-full rounded-full transition-all duration-500 bg-cyan-400" style={{ width: `${shPct}%` }} />
+        </div>
+        <span className="text-[8px] tabular-nums text-cyan-300 w-6 text-right">{shield}</span>
       </div>
     </div>
   );
 }
 
-// ─── Linha do log ─────────────────────────────────────────────────────────────
+// ─── Log row ──────────────────────────────────────────────────────────────────
 
 function LogRow({ log }: { log: TurnLog }) {
-  const icon:  Record<TurnLog["type"], string> = { damage:"⚔️", shield:"🛡️", heal:"💚", status:"💫", ultimate:"✨", death:"💀", info:"ℹ️" };
-  const color: Record<TurnLog["type"], string> = {
+  const ICON:  Record<TurnLog["type"], string> = { damage:"⚔️", shield:"🛡️", heal:"💚", status:"💫", ultimate:"✨", death:"💀", info:"ℹ️" };
+  const COLOR: Record<TurnLog["type"], string> = {
     damage:"text-red-400", shield:"text-cyan-400", heal:"text-emerald-400",
     status:"text-yellow-400", ultimate:"text-arena-primary", death:"text-red-400 font-bold", info:"text-arena-muted",
   };
   return (
-    <div className={`flex items-start gap-1.5 py-0.5 text-[10px] leading-tight ${color[log.type]}`}>
-      <span className="shrink-0 w-4 text-center">{icon[log.type]}</span>
+    <div className={`flex items-start gap-1.5 py-0.5 text-[10px] leading-tight ${COLOR[log.type]}`}>
+      <span className="shrink-0 w-4 text-center">{ICON[log.type]}</span>
       <span>{log.text}</span>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SELETOR DE CAMPEÃO
+// 1. CHAMPION PICKER
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ChampionPicker({ onPick }: { onPick: (c: ChampionClass) => void }) {
   return (
     <div className="flex flex-col min-h-screen bg-arena-bg">
-
-      {/* Header */}
-      <div className="flex items-center gap-3 px-4 pt-6 pb-3 border-b border-arena-border">
-        <Link to="/" className="text-arena-muted text-xl leading-none">←</Link>
+      <div className="flex items-center gap-3 px-4 pt-4 pb-3 border-b border-arena-border">
+        <Link to="/" className="text-arena-muted text-xl shrink-0">←</Link>
+        <BahiaArenaLogo size={38} showWordmark={false} />
         <div>
           <p className="font-display text-arena-primary text-[10px] tracking-widest">DEMO BATTLE</p>
-          <p className="text-xs text-arena-muted">Escolha seu campeão</p>
+          <p className="text-xs text-arena-muted">Pick your champion</p>
         </div>
       </div>
 
-      {/* Grade de campeões — cada card mostra arte + arena + stats */}
       <div className="flex-1 p-4 pb-6">
-        <p className="text-[11px] text-arena-muted text-center mb-4">
-          Sem carteira necessária · IA como adversário
-        </p>
-
+        <p className="text-[11px] text-arena-muted text-center mb-4">No wallet · AI opponent</p>
         <div className="grid grid-cols-2 gap-3">
           {CHAMPIONS.map(c => (
             <button
               key={c.class}
               onClick={() => onPick(c.class)}
-              className="relative overflow-hidden rounded-2xl active:scale-95 transition-transform text-left"
+              className="relative overflow-hidden rounded-2xl active:scale-95 transition-transform"
               style={{ height: 200 }}
             >
-              {/* Arena de fundo */}
               <BattleArenaBackground classA={c.class} />
-
-              {/* Overlay */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
-
-              {/* Arte do campeão */}
-              <div className="absolute inset-0 flex items-center justify-center" style={{ paddingBottom: 48 }}>
+              <div className="absolute inset-0 flex items-center justify-center pb-10">
                 <ChampionArt class_={c.class} size={80} animated={true} />
               </div>
-
-              {/* Borda colorida */}
               <div className={`absolute inset-0 rounded-2xl border-2 ${c.borderColor} pointer-events-none`} />
-
-              {/* Info na base */}
               <div className="absolute bottom-0 left-0 right-0 px-3 pb-3">
                 <p className="text-white text-sm font-bold">{c.name}</p>
                 <p className="text-white/60 text-[10px]">{c.role}</p>
-                {/* Mini stats */}
-                <div className="flex gap-2 mt-1">
-                  <span className="text-[9px] bg-white/10 text-white/70 px-1.5 py-0.5 rounded">⚔️ {c.attack}</span>
-                  <span className="text-[9px] bg-white/10 text-white/70 px-1.5 py-0.5 rounded">🛡️ {c.defense}</span>
-                  <span className="text-[9px] bg-white/10 text-white/70 px-1.5 py-0.5 rounded">⚡ {c.speed}</span>
+                <div className="flex gap-1.5 mt-1 flex-wrap">
+                  <span className="text-[9px] bg-white/10 text-white/70 px-1.5 py-0.5 rounded">⚔️{c.attack}</span>
+                  <span className="text-[9px] bg-white/10 text-white/70 px-1.5 py-0.5 rounded">🛡️{c.defense}</span>
+                  <span className="text-[9px] bg-white/10 text-white/70 px-1.5 py-0.5 rounded">⚡{c.speed}</span>
                 </div>
               </div>
-
-              {/* Badge de ultimate */}
-              <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm rounded-full px-2 py-0.5">
-                <span className="text-[9px] text-arena-primary font-bold">
-                  {CHAMPION_CARDS[c.class].cards[3].name}
-                </span>
+              <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm rounded-full px-1.5 py-0.5">
+                <span className="text-[9px] text-arena-primary font-bold">{CHAMPION_CARDS[c.class].cards[3].name}</span>
               </div>
             </button>
           ))}
         </div>
-
-        {/* Tupã — card extra no centro (5 é ímpar) */}
-        {/* Já coberto pela grid — o 5º item ocupa metade da última linha */}
       </div>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TELA DE BATALHA
+// 2. SETUP SCREEN — dificuldade + arena
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface SetupConfig {
+  difficulty: Difficulty;
+  arena:      ArenaTheme;
+}
+
+const DIFFICULTIES: { id: Difficulty; label: string; emoji: string; desc: string; color: string }[] = [
+  { id: "easy",   label: "Easy",   emoji: "🟢", desc: "AI plays 1 card · no ultimate",    color: "border-emerald-500 bg-emerald-500/10 text-emerald-400" },
+  { id: "medium", label: "Medium", emoji: "🟡", desc: "AI plays 2 cards · uses ultimate", color: "border-amber-400  bg-amber-400/10  text-amber-300"   },
+  { id: "hard",   label: "Hard",   emoji: "🔴", desc: "Tactical AI · aggressive ultimate", color: "border-red-500   bg-red-500/10   text-red-400"     },
+];
+
+const ARENAS: { id: ArenaTheme; label: string; emoji: string }[] = [
+  { id: "amazon",  label: "Amazon Rainforest",        emoji: "🌿" },
+  { id: "stadium", label: "Maracanã",                 emoji: "⚽" },
+  { id: "sea",     label: "Bay of All Saints",        emoji: "⛵" },
+];
+
+function SetupScreen({
+  myClass,
+  onStart,
+  onBack,
+}: {
+  myClass:  ChampionClass;
+  onStart:  (cfg: SetupConfig) => void;
+  onBack:   () => void;
+}) {
+  const [difficulty, setDifficulty] = useState<Difficulty>("medium");
+  const [arena,      setArena]      = useState<ArenaTheme>("amazon");
+  const champ = CHAMPIONS[myClass];
+
+  return (
+    <div className="flex flex-col min-h-screen bg-arena-bg">
+      {/* Header */}
+      <div className="flex items-center gap-3 px-4 pt-4 pb-3 border-b border-arena-border shrink-0">
+        <button onClick={onBack} className="text-arena-muted text-xl shrink-0">←</button>
+        <BahiaArenaLogo size={38} showWordmark={false} />
+        <div>
+          <p className="font-display text-arena-primary text-[10px] tracking-widest">BATTLE SETUP</p>
+          <p className="text-xs text-arena-muted">Selected: {champ.name}</p>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-5 pt-4">
+
+        {/* Chosen champion preview */}
+        <div className="relative overflow-hidden rounded-2xl" style={{ height: 120 }}>
+          <BattleArenaBackground classA={myClass} />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-transparent to-black/70" />
+          <div className="absolute inset-0 flex items-center gap-4 px-5">
+            <ChampionArt class_={myClass} size={80} animated={true} />
+            <div>
+              <p className="text-white font-bold text-lg leading-tight">{champ.name}</p>
+              <p className="text-white/70 text-xs">{champ.role}</p>
+              <div className="flex gap-2 mt-1.5">
+                <span className="text-[10px] bg-white/10 text-white px-2 py-0.5 rounded-full">⚔️ {champ.attack}</span>
+                <span className="text-[10px] bg-white/10 text-white px-2 py-0.5 rounded-full">🛡️ {champ.defense}</span>
+              </div>
+              <p className="text-arena-primary text-[10px] mt-1 font-semibold">
+                ✨ Ultimate: {CHAMPION_CARDS[myClass].cards[3].name}
+              </p>
+            </div>
+          </div>
+          <div className={`absolute inset-0 rounded-2xl border-2 ${champ.borderColor} pointer-events-none`} />
+        </div>
+
+        {/* Difficulty */}
+        <div>
+          <p className="text-xs font-semibold text-white uppercase tracking-wider mb-2">⚙️ Difficulty</p>
+          <div className="space-y-2">
+            {DIFFICULTIES.map(d => (
+              <button
+                key={d.id}
+                onClick={() => setDifficulty(d.id)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 transition-all active:scale-[0.98]
+                  ${difficulty === d.id ? d.color : "border-arena-border bg-arena-surface text-arena-muted"}`}
+              >
+                <span className="text-xl">{d.emoji}</span>
+                <div className="text-left flex-1">
+                  <p className="text-sm font-bold leading-tight">{d.label}</p>
+                  <p className="text-[10px] opacity-80">{d.desc}</p>
+                </div>
+                {difficulty === d.id && (
+                  <span className="text-xs font-bold">✓</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Arena */}
+        <div>
+          <p className="text-xs font-semibold text-white uppercase tracking-wider mb-2">🗺️ Battlefield</p>
+          <div className="space-y-2">
+            {ARENAS.map(a => (
+              <button
+                key={a.id}
+                onClick={() => setArena(a.id)}
+                className={`w-full relative overflow-hidden rounded-xl border-2 transition-all active:scale-[0.98]
+                  ${arena === a.id ? "border-arena-primary" : "border-arena-border"}`}
+                style={{ height: 72 }}
+              >
+                <BattleArenaBackground theme={a.id} />
+                <div className="absolute inset-0 bg-gradient-to-r from-black/60 to-black/30" />
+                <div className="absolute inset-0 flex items-center gap-3 px-4">
+                  <span className="text-2xl">{a.emoji}</span>
+                  <p className="text-white font-bold text-sm">{a.label}</p>
+                </div>
+                {arena === a.id && (
+                  <div className="absolute top-2 right-2 text-arena-primary text-sm font-bold">✓</div>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+      </div>
+
+      {/* CTA */}
+      <div className="px-4 pb-6 pt-2 shrink-0">
+        <button
+          onClick={() => onStart({ difficulty, arena })}
+          className="w-full py-4 rounded-2xl bg-arena-primary text-arena-bg font-bold text-base active:scale-[0.98] transition-transform shadow-lg shadow-arena-primary/40"
+          style={{ boxShadow: "0 4px 24px rgba(246,201,14,0.35)" }}
+        >
+          ⚔️ BATTLE!
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 3. BATTLE SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
 
 function BattleScreen({
-  myClass,
-  opponentClass,
-  onReset,
+  myClass, opponentClass, difficulty, arena, onReset,
 }: {
   myClass:       ChampionClass;
   opponentClass: ChampionClass;
+  difficulty:    Difficulty;
+  arena:         ArenaTheme;
   onReset:       () => void;
 }) {
   const logRef       = useRef<HTMLDivElement>(null);
@@ -155,173 +288,428 @@ function BattleScreen({
   const {
     phase, battleState, playerA, playerB,
     selectedCards, canConfirm, selectCard, confirmTurn,
-    winner,
-  } = useBattleCards(myClass, opponentClass, true);
+    lastResult, winner,
+  } = useBattleCards(myClass, opponentClass, true, difficulty);
 
-  // Auto-scroll do log
+  // ── Animation state ──────────────────────────────────────────────────────────
+  const [floatA,         setFloatA]         = useState<FloatItem[]>([]);
+  const [floatB,         setFloatB]         = useState<FloatItem[]>([]);
+  const [animKeyA,       setAnimKeyA]       = useState(0);
+  const [animKeyB,       setAnimKeyB]       = useState(0);
+  const [shakeA,         setShakeA]         = useState(false);
+  const [shakeB,         setShakeB]         = useState(false);
+  const [flashA,         setFlashA]         = useState<FlashType>(null);
+  const [flashB,         setFlashB]         = useState<FlashType>(null);
+  const [flashKeyA,      setFlashKeyA]      = useState(0);
+  const [flashKeyB,      setFlashKeyB]      = useState(0);
+  const [screenFlash,    setScreenFlash]    = useState(false);
+  const [screenFlashKey, setScreenFlashKey] = useState(0);
+  const lastTurnRef = useRef(-1);
+  const { addMatchResult, profile: playerProfile, isConnected } = usePlayerProfile();
+  const [matchPoints, setMatchPoints] = useState<number | null>(null);
+  const matchRecordedRef = useRef(false);
+
+  // ── SF cinematic state ──────────────────────────────────────────────────────
+  const [fightBanner,     setFightBanner]     = useState<string>("FIGHT!");
+  const [fightBannerKey,  setFightBannerKey]  = useState(0);
+  const [showFightBanner, setShowFightBanner] = useState(true);
+  const [moveText,        setMoveText]        = useState<string | null>(null);
+  const [moveTextKey,     setMoveTextKey]     = useState(0);
+  const [showResultCTAs,  setShowResultCTAs]  = useState(false);
+
+  useEffect(() => {
+    if (!lastResult) return;
+    const turn = lastResult.newState.turn;
+    if (turn === lastTurnRef.current) return;
+    lastTurnRef.current = turn;
+
+    const nFA: FloatItem[] = [], nFB: FloatItem[] = [];
+    let hitA = false, hitB = false;
+    let fA: FlashType = null, fB: FlashType = null;
+    let doFlash = false;
+    const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    for (const e of lastResult.newState.log) {
+      if (e.type === "damage" && typeof e.damage === "number") {
+        if (e.side === "A") { hitA = true; fA = "hit"; nFA.push({ id: uid(), label: `-${e.damage}`, type: "damage" }); }
+        if (e.side === "B") { hitB = true; fB = "hit"; nFB.push({ id: uid(), label: `-${e.damage}`, type: "damage" }); }
+      }
+      if (e.type === "shield" && typeof e.shield === "number") {
+        if (e.side === "A") { if (!fA || fA === "hit") fA = "shield"; nFA.push({ id: uid(), label: `+${e.shield}🛡️`, type: "shield" }); }
+        if (e.side === "B") { if (!fB || fB === "hit") fB = "shield"; nFB.push({ id: uid(), label: `+${e.shield}🛡️`, type: "shield" }); }
+      }
+      if (e.type === "heal" && typeof e.heal === "number") {
+        if (e.side === "A") { if (!fA) fA = "heal"; nFA.push({ id: uid(), label: `+${e.heal}💚`, type: "heal" }); }
+        if (e.side === "B") { if (!fB) fB = "heal"; nFB.push({ id: uid(), label: `+${e.heal}💚`, type: "heal" }); }
+      }
+      if (e.type === "ultimate") {
+        doFlash = true;
+        if (e.side === "A") { fA = "ultimate"; nFA.push({ id: uid(), label: "✨ ULTIMATE!", type: "ultimate" }); }
+        if (e.side === "B") { fB = "ultimate"; nFB.push({ id: uid(), label: "✨ ULTIMATE!", type: "ultimate" }); }
+      }
+      if (e.type === "status") {
+        if (e.text.includes("A is")) nFA.push({ id: uid(), label: "💫", type: "status" });
+        if (e.text.includes("B is")) nFB.push({ id: uid(), label: "💫", type: "status" });
+      }
+    }
+
+    if (nFA.length) setFloatA(p => [...p, ...nFA]);
+    if (nFB.length) setFloatB(p => [...p, ...nFB]);
+
+    if (hitA) { setAnimKeyA(k=>k+1); requestAnimationFrame(() => { setShakeA(true); setTimeout(() => setShakeA(false), 500); }); }
+    if (hitB) { setAnimKeyB(k=>k+1); requestAnimationFrame(() => { setShakeB(true); setTimeout(() => setShakeB(false), 500); }); }
+    if (fA) { setFlashA(fA); setFlashKeyA(k=>k+1); setTimeout(() => setFlashA(null), fA === "ultimate" ? 700 : 450); }
+    if (fB) { setFlashB(fB); setFlashKeyB(k=>k+1); setTimeout(() => setFlashB(null), fB === "ultimate" ? 700 : 450); }
+    if (doFlash) { setScreenFlash(true); setScreenFlashKey(k=>k+1); setTimeout(() => setScreenFlash(false), 600); }
+
+    // ── Centre cinematic text ──────────────────────────────────────────────────
+    {
+      let maxDmg = 0, hasUlt = false;
+      for (const e of lastResult.newState.log) {
+        if (e.type === "damage" && typeof e.damage === "number" && e.damage > maxDmg) maxDmg = e.damage;
+        if (e.type === "ultimate") hasUlt = true;
+      }
+      const center = hasUlt ? "✨ ULTIMATE!" : maxDmg >= 30 ? "💥 CRITICAL!" : maxDmg > 0 ? `${maxDmg} DMG` : null;
+      if (center) {
+        setMoveText(center);
+        setMoveTextKey(k => k + 1);
+        setTimeout(() => setMoveText(null), 1_600);
+      }
+    }
+  }, [lastResult]);
+
+  const removeFA = useCallback((id: string) => setFloatA(p => p.filter(f => f.id !== id)), []);
+  const removeFB = useCallback((id: string) => setFloatB(p => p.filter(f => f.id !== id)), []);
+
+  // "FIGHT!" intro — hide after 1.3 s
+  useEffect(() => {
+    const t = setTimeout(() => setShowFightBanner(false), 1_300);
+    return () => clearTimeout(t);
+  }, []);
+
+  // K.O. / YOU WIN! / DRAW on result
+  useEffect(() => {
+    if (phase !== "result") return;
+    const text = winner === "A" ? "YOU WIN!" : winner === "B" ? "K.O." : "DRAW!";
+    setFightBanner(text);
+    setFightBannerKey(k => k + 1);
+    setShowFightBanner(true);
+    const t = setTimeout(() => setShowResultCTAs(true), 1_700);
+    return () => clearTimeout(t);
+  }, [phase, winner]);
+
+  useEffect(() => {
+    if (phase !== "result" || matchRecordedRef.current) return;
+    matchRecordedRef.current = true;
+    const outcome = winner === "A" ? "win" : winner === "B" ? "loss" : "draw";
+    const res = addMatchResult(outcome, champA.name, champB.name, arena, difficulty);
+    if (res) setMatchPoints(res.pointsEarned);
+  }, [phase, winner]);
+
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [battleState.log.length]);
 
+  const isVictoryA = phase === "result" && winner === "A";
+  const isDefeatA  = phase === "result" && winner === "B";
+  const isVictoryB = phase === "result" && winner === "B";
+  const isDefeatB  = phase === "result" && winner === "A";
+
+  const DIFF_BADGE: Record<Difficulty, string> = {
+    easy:   "text-emerald-400 bg-emerald-400/10",
+    medium: "text-amber-300  bg-amber-400/10",
+    hard:   "text-red-400    bg-red-500/10",
+  };
+  const DIFF_LABEL: Record<Difficulty, string> = { easy: "Easy", medium: "Medium", hard: "Hard" };
+
+  // HP / shield % for SF top bars
+  const hpAPct = Math.max(0, Math.min(100, (playerA.displayHp  / BASE_HP)     * 100));
+  const hpBPct = Math.max(0, Math.min(100, (playerB.displayHp  / BASE_HP)     * 100));
+  const shAPct = Math.max(0, Math.min(100, (playerA.displayShield / BASE_SHIELD) * 100));
+  const shBPct = Math.max(0, Math.min(100, (playerB.displayShield / BASE_SHIELD) * 100));
+  const hpACol = hpAPct > 50 ? "#22c55e" : hpAPct > 25 ? "#f59e0b" : "#ef4444";
+  const hpBCol = hpBPct > 50 ? "#22c55e" : hpBPct > 25 ? "#f59e0b" : "#ef4444";
+
   return (
-    <div className="flex flex-col min-h-screen bg-arena-bg pb-2">
+    <div className="flex flex-col bg-black min-h-screen overflow-hidden">
 
-      {/* Header */}
-      <div className="flex items-center gap-3 px-4 pt-5 pb-2 border-b border-arena-border shrink-0">
-        <button onClick={onReset} className="text-arena-muted text-xl leading-none">←</button>
-        <div className="flex-1">
-          <p className="font-display text-arena-primary text-[10px] tracking-widest">DEMO BATTLE</p>
-          <p className="text-[11px] text-arena-muted">{champA.name} vs {champB.name}</p>
+      {/* ═══════════════════════════════════════════════════════════════════
+          MAIN ARENA — flex-1 so it fills all available space.
+          HUD is overlaid inside so no space is wasted.
+      ════════════════════════════════════════════════════════════════════ */}
+      <div className="relative flex-1 min-h-[300px] overflow-hidden">
+        <BattleArenaBackground theme={arena} />
+        {/* gradient: darken top (for HUD readability) + bottom (for character footing) */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-transparent to-black/80" />
+
+        {/* ── OVERLAID TOP HUD ─────────────────────────────────────────── */}
+        <div className="absolute top-0 left-0 right-0 z-30 px-2 pt-2">
+          {/* Row 1: back · title · difficulty */}
+          <div className="flex items-center justify-between mb-1.5">
+            <button
+              onClick={onReset}
+              className="w-7 h-7 flex items-center justify-center rounded-full bg-black/60 backdrop-blur-sm text-white text-sm active:scale-90 transition-transform"
+            >←</button>
+            <span className="font-display text-[9px] text-white/35 tracking-[0.2em]">DEMO BATTLE</span>
+            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full backdrop-blur-sm ${DIFF_BADGE[difficulty]}`}>
+              {DIFF_LABEL[difficulty].toUpperCase()}
+            </span>
+          </div>
+
+          {/* Row 2: HP bars */}
+          <div className="flex items-start gap-2">
+
+            {/* Player A */}
+            <div className="flex-1 min-w-0 bg-black/55 backdrop-blur-sm rounded-lg px-2 py-1.5">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[8px] font-bold text-arena-primary truncate tracking-wide">{champA.name.toUpperCase()}</span>
+                <span className="text-[7px] text-arena-primary/40">YOU</span>
+              </div>
+              {/* HP — drains left→right */}
+              <div className="relative h-3 rounded-sm overflow-hidden bg-black/60">
+                <div className="absolute inset-y-0 left-0 transition-all duration-500 ease-out rounded-sm"
+                  style={{ width:`${hpAPct}%`, background:`linear-gradient(90deg,${hpACol}bb,${hpACol})`, boxShadow:`0 0 8px ${hpACol}99` }}/>
+                {[25,50,75].map(p=><div key={p} className="absolute inset-y-0 w-px bg-black/50" style={{left:`${p}%`}}/>)}
+              </div>
+              {/* Shield */}
+              <div className="mt-0.5 h-1 rounded-sm overflow-hidden bg-black/40">
+                <div className="h-full rounded-sm transition-all duration-500"
+                  style={{width:`${shAPct}%`, background:"#22d3ee", boxShadow:shAPct>0?"0 0 4px #22d3ee":"none"}}/>
+              </div>
+              <div className="mt-0.5 text-[7px] text-white/25 tabular-nums">❤️ {playerA.displayHp} · 🛡️ {playerA.displayShield}</div>
+            </div>
+
+            {/* Turn counter */}
+            <div className="shrink-0 text-center w-10 pt-1">
+              <div className="text-[7px] text-white/20 font-mono uppercase tracking-widest">TURN</div>
+              <div className={`text-xl font-display font-black leading-none tabular-nums
+                ${phase==="resolving"?"text-arena-primary animate-pulse":phase==="result"?"text-purple-400":"text-white"}`}>
+                {battleState.turn}
+              </div>
+            </div>
+
+            {/* Player B */}
+            <div className="flex-1 min-w-0 bg-black/55 backdrop-blur-sm rounded-lg px-2 py-1.5">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[7px] text-arena-muted/40">AI</span>
+                <span className="text-[8px] font-bold text-arena-muted truncate text-right tracking-wide">{champB.name.toUpperCase()}</span>
+              </div>
+              {/* HP — drains right→left */}
+              <div className="relative h-3 rounded-sm overflow-hidden bg-black/60">
+                <div className="absolute inset-y-0 right-0 transition-all duration-500 ease-out rounded-sm"
+                  style={{width:`${hpBPct}%`, background:`linear-gradient(270deg,${hpBCol}bb,${hpBCol})`, boxShadow:`0 0 8px ${hpBCol}99`}}/>
+                {[25,50,75].map(p=><div key={p} className="absolute inset-y-0 w-px bg-black/50" style={{left:`${p}%`}}/>)}
+              </div>
+              {/* Shield */}
+              <div className="mt-0.5 h-1 rounded-sm overflow-hidden flex justify-end bg-black/40">
+                <div className="h-full rounded-sm transition-all duration-500"
+                  style={{width:`${shBPct}%`, background:"#22d3ee", boxShadow:shBPct>0?"0 0 4px #22d3ee":"none"}}/>
+              </div>
+              <div className="mt-0.5 flex justify-end text-[7px] text-white/25 tabular-nums">{playerB.displayHp} ❤️ · {playerB.displayShield} 🛡️</div>
+            </div>
+
+          </div>
         </div>
-        <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${
-          phase === "result"    ? "bg-purple-500/20 text-purple-400"     :
-          phase === "resolving" ? "bg-orange-500/20 text-orange-400 animate-pulse" :
-          "bg-arena-success/20 text-arena-success"
-        }`}>
-          {phase === "result" ? "FIM" : phase === "resolving" ? "RESOLVENDO" : `TURNO ${battleState.turn}`}
-        </span>
+        {/* ── END OVERLAID HUD ─────────────────────────────────────────── */}
+
+        {/* Screen flash (ultimate) */}
+        {screenFlash && (
+          <div key={screenFlashKey} className="absolute inset-0 z-20 pointer-events-none animate-screen-flash"
+            style={{background:"rgba(255,255,255,0.55)"}}/>
+        )}
+
+        {/* VS label — shows in middle of arena when fighting */}
+        {phase !== "result" && (
+          <div className="absolute inset-x-0 z-10 pointer-events-none flex justify-center" style={{top:"44%"}}>
+            <span className="px-2 py-0.5 rounded-full bg-black/60 border border-white/10 text-[9px] font-display text-arena-primary/40 backdrop-blur-sm tracking-widest">VS</span>
+          </div>
+        )}
+
+        {/* Float combat text — left side (player) */}
+        <div className="absolute left-0 w-5/12 top-0 bottom-0 pointer-events-none z-30">
+          <FloatingCombatText items={floatA} onRemove={removeFA} />
+        </div>
+        {/* Float combat text — right side (AI) */}
+        <div className="absolute right-0 w-5/12 top-0 bottom-0 pointer-events-none z-30">
+          <FloatingCombatText items={floatB} onRemove={removeFB} />
+        </div>
+
+        {/* Centre cinematic move text */}
+        {moveText && (
+          <div key={moveTextKey} className="absolute inset-x-0 z-20 flex justify-center pointer-events-none" style={{top:"38%"}}>
+            <span className={`font-display font-black tracking-widest animate-pop-in drop-shadow-xl
+              ${moveText.includes("ULTIMATE")?"text-4xl text-arena-primary [text-shadow:0_0_30px_#F6C90E,0_0_60px_#F6C90E]":
+                moveText.includes("CRITICAL")?"text-3xl text-red-400 [text-shadow:0_0_20px_#ef4444]":
+                "text-2xl text-white/90"}`}>
+              {moveText}
+            </span>
+          </div>
+        )}
+
+        {/* FIGHT! / K.O. / YOU WIN! / DRAW! banner */}
+        {showFightBanner && (
+          <div key={fightBannerKey} className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none">
+            <span className={`font-display font-black leading-none animate-pop-in
+              ${fightBanner==="FIGHT!"
+                ?"text-6xl text-arena-primary [text-shadow:0_0_40px_#F6C90E,0_0_80px_#F6C90E,0_3px_0_rgba(0,0,0,0.9)]"
+                :fightBanner==="K.O."
+                ?"text-8xl text-red-500 [text-shadow:0_0_60px_#ef4444,0_0_120px_#ef4444,0_4px_0_rgba(0,0,0,0.9)]"
+                :fightBanner==="YOU WIN!"
+                ?"text-5xl text-green-400 [text-shadow:0_0_40px_#4ade80,0_0_80px_#4ade80,0_3px_0_rgba(0,0,0,0.9)]"
+                :"text-5xl text-white [text-shadow:0_3px_0_rgba(0,0,0,0.9)]"}`}>
+              {fightBanner}
+            </span>
+          </div>
+        )}
+
+        {/* ── CHAMPION A — left, facing right, large ───────────────────── */}
+        <div className={`absolute bottom-2 left-4 z-10 flex flex-col items-center
+          transition-transform duration-300
+          ${phase==="resolving"?"translate-x-8":""}
+          ${isDefeatA?"opacity-40 grayscale":""}`}
+        >
+          <div key={`cA-${animKeyA}-${flashKeyA}`}
+            className={`relative ${shakeA?"animate-shake-hit":""} ${flashClass(flashA)}
+              ${isVictoryA?"animate-victory-pulse":""} ${isDefeatA?"animate-defeat-shake":""}`}
+          >
+            <ChampionArt class_={myClass} size={150} animated={true} />
+            {isVictoryA && <div className="absolute -top-8 left-1/2 -translate-x-1/2 text-3xl animate-bounce z-10">👑</div>}
+          </div>
+        </div>
+
+        {/* ── CHAMPION B — right, mirrored, large ──────────────────────── */}
+        <div className={`absolute bottom-2 right-4 z-10 flex flex-col items-center
+          transition-transform duration-300
+          ${phase==="resolving"?"-translate-x-8":""}
+          ${isDefeatB?"opacity-40 grayscale":""}`}
+        >
+          <div key={`cB-${animKeyB}-${flashKeyB}`}
+            className={`relative ${shakeB?"animate-shake-hit":""} ${flashClass(flashB)}
+              ${isVictoryB?"animate-victory-pulse":""} ${isDefeatB?"animate-defeat-shake":""}`}
+            style={{transform:"scaleX(-1)"}}
+          >
+            <ChampionArt class_={opponentClass} size={150} animated={true} />
+            {isVictoryB && (
+              <div className="absolute -top-8 left-1/2 -translate-x-1/2 text-3xl animate-bounce z-10"
+                style={{transform:"scaleX(-1)"}}>👑</div>
+            )}
+          </div>
+        </div>
+
+      </div>
+      {/* ═══════════════════════ END ARENA ══════════════════════════════ */}
+
+      {/* ─── DRIVE / ENERGY GAUGE ──────────────────────────────────────── */}
+      <div className="shrink-0 px-3 pt-1.5 pb-1 bg-black flex items-center gap-2">
+        <div className="flex-1 flex gap-0.5">
+          {Array.from({length:6}).map((_,i)=>(
+            <div key={i} className="flex-1 h-2 rounded-[2px] transition-all duration-300"
+              style={{
+                background: i<battleState.energyA?"linear-gradient(90deg,#7c3aed,#c084fc)":"rgba(255,255,255,0.05)",
+                boxShadow:  i<battleState.energyA?"0 0 5px #a855f7":"none",
+              }}/>
+          ))}
+        </div>
+        <div className="shrink-0 text-[8px] text-white/20 font-mono px-1">
+          {phase==="resolving"?<span className="text-arena-primary animate-pulse">⚔️</span>:"⚡"}
+        </div>
+        <div className="flex-1 flex gap-0.5 opacity-25">
+          {Array.from({length:6}).map((_,i)=>(
+            <div key={i} className="flex-1 h-2 rounded-[2px]" style={{background:"rgba(255,255,255,0.08)"}}/>
+          ))}
+        </div>
       </div>
 
-      {/* ── ARENA ── */}
-      <div className="relative shrink-0 overflow-hidden" style={{ height: 216 }}>
-        <BattleArenaBackground classA={myClass} classB={opponentClass} />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-arena-bg/60" />
-
-        {/* VS pill */}
-        <div className="absolute top-3 inset-x-0 flex justify-center z-10 pointer-events-none">
-          <div className="px-3 py-1 rounded-full bg-black/60 border border-white/10 backdrop-blur-sm">
-            <span className="text-[10px] font-display text-arena-primary">VS</span>
-          </div>
-        </div>
-
-        {/* Campeões */}
-        <div className="absolute inset-0 z-10 grid grid-cols-2 gap-2 px-3 pt-8 pb-2">
-          {/* VOCÊ */}
-          <div className={`flex flex-col items-center gap-1 transition-all duration-500 ${
-            phase === "result" && winner === "B" ? "opacity-40 grayscale" : ""
-          }`}>
-            <div className={`relative rounded-2xl p-2 border ${champA.borderColor} bg-black/50 backdrop-blur-sm ${
-              phase === "result" && winner === "A" ? "ring-2 ring-arena-primary ring-offset-1 ring-offset-transparent shadow-[0_0_20px_rgba(246,201,14,0.5)]" : ""
-            }`}>
-              <ChampionArt class_={myClass} size={60} animated={phase === "resolving"} />
-              {phase === "result" && winner === "A" && (
-                <div className="absolute -top-2 -right-2 text-lg animate-bounce">👑</div>
-              )}
-            </div>
-            <div className="bg-black/60 backdrop-blur-sm rounded-lg px-2 py-1 space-y-0.5 w-full">
-              <p className="text-[10px] font-bold text-white text-center">{champA.name}</p>
-              <p className="text-[9px] text-arena-primary text-center font-bold">VOCÊ</p>
-              <StatBars hp={playerA.displayHp} shield={playerA.displayShield} side="A" />
-            </div>
-          </div>
-
-          {/* IA */}
-          <div className={`flex flex-col items-center gap-1 transition-all duration-500 ${
-            phase === "result" && winner === "A" ? "opacity-40 grayscale" : ""
-          }`}>
-            <div className={`relative rounded-2xl p-2 border ${champB.borderColor} bg-black/50 backdrop-blur-sm ${
-              phase === "result" && winner === "B" ? "ring-2 ring-arena-primary ring-offset-1 ring-offset-transparent shadow-[0_0_20px_rgba(246,201,14,0.5)]" : ""
-            }`}>
-              <ChampionArt class_={opponentClass} size={60} animated={phase === "resolving"} />
-              {phase === "result" && winner === "B" && (
-                <div className="absolute -top-2 -right-2 text-lg animate-bounce">👑</div>
-              )}
-            </div>
-            <div className="bg-black/60 backdrop-blur-sm rounded-lg px-2 py-1 space-y-0.5 w-full">
-              <p className="text-[10px] font-bold text-white text-center">{champB.name}</p>
-              <p className="text-[9px] text-arena-muted text-center">IA</p>
-              <StatBars hp={playerB.displayHp} shield={playerB.displayShield} side="B" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── BANNER DE RESULTADO ── */}
-      {phase === "result" && (
-        <div className="mx-3 mt-2 p-3 rounded-2xl bg-arena-primary/10 border border-arena-primary/40 text-center">
-          <p className="text-2xl">{winner === "A" ? "🏆" : winner === "B" ? "💀" : "🤝"}</p>
-          <p className="font-display text-arena-primary text-sm mt-1">
-            {winner === "A" ? "VOCÊ VENCEU!" : winner === "B" ? "DERROTA!" : "EMPATE!"}
-          </p>
-          <p className="text-[11px] text-arena-muted mt-1">
-            {winner === "A" ? "+3 pts ranking (arena real)" : "+1 pt ranking (arena real)"}
-          </p>
-        </div>
+      {/* ─── PHASE TEXT ────────────────────────────────────────────────── */}
+      {phase==="resolving" && (
+        <p className="shrink-0 text-center text-xs text-arena-primary animate-pulse px-4 py-1">⚔️ Resolving turn…</p>
       )}
-
-      {/* ── FASE ── */}
-      {phase === "resolving" && (
-        <p className="text-center text-xs text-arena-primary animate-pulse px-4 py-1.5">⚔️ Resolvendo turno…</p>
-      )}
-      {phase === "choose" && (
-        <p className="text-center text-[11px] text-white/50 px-4 py-1.5">
-          Turno {battleState.turn} — Escolha suas cartas
+      {phase==="choose" && (
+        <p className="shrink-0 text-center text-[11px] text-white/30 px-4 py-0.5">
+          Turn {battleState.turn} · Choose up to {battleState.statusA==="halfTurn"?"1":"2"} card{battleState.statusA!=="halfTurn"?"s":""}
         </p>
       )}
 
-      {/* ── CARTAS ── */}
-      {(phase === "choose" || phase === "resolving") && (
-        <div className="px-3 shrink-0">
+      {/* ─── CARDS + CONFIRM ───────────────────────────────────────────── */}
+      {(phase==="choose"||phase==="resolving") && (
+        <div className="shrink-0 px-3">
           <CardHand
             cards={myCardConfig.cards}
             selected={selectedCards}
             energy={battleState.energyA}
-            maxSelect={battleState.statusA === "halfTurn" ? 1 : 2}
-            isStunned={battleState.statusA === "stunned"}
-            isHalfTurn={battleState.statusA === "halfTurn"}
+            maxSelect={battleState.statusA==="halfTurn"?1:2}
+            isStunned={battleState.statusA==="stunned"}
+            isHalfTurn={battleState.statusA==="halfTurn"}
             onSelect={selectCard}
-            disabled={phase === "resolving"}
+            disabled={phase==="resolving"}
           />
           <button
             onClick={confirmTurn}
-            disabled={!canConfirm || phase === "resolving"}
+            disabled={!canConfirm||phase==="resolving"}
             className="mt-2 w-full py-3.5 rounded-xl bg-arena-primary text-arena-bg font-bold text-sm active:scale-95 transition-transform shadow-lg shadow-arena-primary/30 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {phase === "resolving"
-              ? "⚔️ Resolvendo…"
-              : battleState.statusA === "stunned"
-              ? "💫 Fim de Turno (Stunned)"
-              : selectedCards.length === 0
-              ? "Selecione uma carta"
-              : `⚔️ Jogar ${selectedCards.length} Carta${selectedCards.length > 1 ? "s" : ""}`}
+            {phase==="resolving"?"⚔️ Resolving…"
+              :battleState.statusA==="stunned"?"💫 End Turn (Stunned)"
+              :selectedCards.length===0?"Select a card"
+              :`⚔️ Play ${selectedCards.length} Card${selectedCards.length>1?"s":""}`}
           </button>
         </div>
       )}
 
-      {/* ── LOG ── */}
-      <div className="flex-1 mx-3 mt-2 min-h-0">
-        <p className="text-[9px] text-arena-muted uppercase tracking-wider mb-1 font-semibold">Log da Batalha</p>
-        <div
-          ref={logRef}
-          className="h-24 overflow-y-auto bg-arena-surface rounded-xl border border-arena-border p-2 scrollbar-hide"
-        >
-          {battleState.log.length === 0 && (
-            <p className="text-[10px] text-arena-muted text-center py-3">Selecione cartas e confirme para começar!</p>
+      {/* ─── MINI BATTLE LOG ───────────────────────────────────────────── */}
+      <div className="shrink-0 mx-3 mt-1.5">
+        <div ref={logRef}
+          className="h-14 overflow-y-auto rounded-xl px-2 py-1.5 scrollbar-hide"
+          style={{background:"rgba(0,0,0,0.5)",border:"1px solid rgba(255,255,255,0.05)"}}>
+          {battleState.log.length===0 && (
+            <p className="text-[10px] text-arena-muted text-center py-1">Select cards and confirm!</p>
           )}
-          {battleState.log.map((entry, i) => <LogRow key={i} log={entry} />)}
-          {phase === "resolving" && (
+          {battleState.log.map((e,i)=><LogRow key={i} log={e}/>)}
+          {phase==="resolving" && (
             <div className="flex items-center gap-1.5 py-0.5 text-[10px] text-arena-primary animate-pulse">
-              <div className="w-1.5 h-1.5 rounded-full bg-arena-primary animate-ping" />
-              Processando…
+              <div className="w-1.5 h-1.5 rounded-full bg-arena-primary animate-ping"/>Processing…
             </div>
           )}
         </div>
       </div>
 
-      {/* ── CTAs DE RESULTADO ── */}
-      {phase === "result" && (
-        <div className="px-3 pt-2 flex flex-col gap-2 shrink-0">
-          <button
-            onClick={onReset}
-            className="w-full py-3 rounded-xl bg-arena-surface border border-arena-border text-sm font-semibold text-white active:scale-95 transition-transform"
-          >
-            🔄 Jogar Novamente
+      {/* ─── RESULT CTAs — delayed so K.O. banner plays first ──────────── */}
+      {phase==="result" && showResultCTAs && (
+        <div className="shrink-0 px-3 pt-2 pb-5 flex flex-col gap-2 animate-pop-in">
+          {/* Points earned */}
+          {matchPoints !== null && (
+            <div className="flex items-center justify-center gap-2 py-1.5 rounded-xl bg-arena-primary/10 border border-arena-primary/20">
+              <span className="text-arena-primary font-bold text-sm">+{matchPoints} pts</span>
+              <span className="text-arena-muted text-xs">added to leaderboard</span>
+            </div>
+          )}
+          {/* X share */}
+          {winner === "A" && (
+            <button
+              onClick={() => {
+                const profile = playerProfile;
+                const text = profile
+                  ? `🏆 Just won with ${champA.name} in @BahiaArenaGame!\n+${matchPoints ?? 10} pts${profile.streak > 1 ? ` 🔥 ${profile.streak}x streak` : ""} | #BahiaArena #Web3Gaming #Celo`
+                  : `🏆 Just beat the AI with ${champA.name} in @BahiaArenaGame! #BahiaArena #Web3Gaming #Celo`;
+                window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+              }}
+              className="w-full py-2.5 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 active:scale-95 transition-transform"
+              style={{ background: "#000", border: "1px solid #333" }}
+            >
+              <span className="text-base font-bold">𝕏</span> Share victory
+            </button>
+          )}
+          {!isConnected && (
+            <p className="text-center text-[10px] text-arena-muted">Connect wallet to save points to leaderboard</p>
+          )}
+          <button onClick={onReset}
+            className="w-full py-3 rounded-xl text-sm font-semibold text-white active:scale-95 transition-transform"
+            style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)"}}>
+            🔄 Play Again
           </button>
-          <Link
-            to="/arena"
-            className="block w-full py-3.5 rounded-xl bg-arena-primary text-arena-bg font-bold text-sm text-center active:scale-95 transition-transform shadow-lg shadow-arena-primary/30"
-          >
-            ⚔️ Entrar na Arena Real
+          <Link to="/arena"
+            className="block w-full py-3.5 rounded-xl bg-arena-primary text-arena-bg font-bold text-sm text-center active:scale-95 transition-transform shadow-lg shadow-arena-primary/30">
+            ⚔️ Enter the Real Arena
           </Link>
         </div>
       )}
@@ -330,34 +718,50 @@ function BattleScreen({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// RAIZ DA PÁGINA
+// PAGE ROOT
 // ─────────────────────────────────────────────────────────────────────────────
 
+type Stage = "pick" | "setup" | "battle";
+
 export default function DemoPage() {
+  const [stage,         setStage]         = useState<Stage>("pick");
   const [myClass,       setMyClass]       = useState<ChampionClass | null>(null);
   const [opponentClass, setOpponentClass] = useState<ChampionClass | null>(null);
+  const [config,        setConfig]        = useState<{ difficulty: Difficulty; arena: ArenaTheme } | null>(null);
 
   const handlePick = (c: ChampionClass) => {
     const others = ([0, 1, 2, 3, 4] as ChampionClass[]).filter(v => v !== c);
-    const ai     = others[Math.floor(Math.random() * others.length)];
     setMyClass(c);
-    setOpponentClass(ai);
+    setOpponentClass(others[Math.floor(Math.random() * others.length)]);
+    setStage("setup");
+  };
+
+  const handleStart = (cfg: { difficulty: Difficulty; arena: ArenaTheme }) => {
+    setConfig(cfg);
+    setStage("battle");
   };
 
   const handleReset = () => {
     setMyClass(null);
     setOpponentClass(null);
+    setConfig(null);
+    setStage("pick");
   };
 
-  if (myClass === null || opponentClass === null) {
-    return <ChampionPicker onPick={handlePick} />;
+  if (stage === "pick") return <ChampionPicker onPick={handlePick} />;
+  if (stage === "setup" && myClass !== null) {
+    return <SetupScreen myClass={myClass} onStart={handleStart} onBack={() => setStage("pick")} />;
   }
-
-  return (
-    <BattleScreen
-      myClass={myClass}
-      opponentClass={opponentClass}
-      onReset={handleReset}
-    />
-  );
+  if (stage === "battle" && myClass !== null && opponentClass !== null && config !== null) {
+    return (
+      <BattleScreen
+        myClass={myClass}
+        opponentClass={opponentClass}
+        difficulty={config.difficulty}
+        arena={config.arena}
+        onReset={handleReset}
+      />
+    );
+  }
+  return null;
 }

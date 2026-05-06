@@ -17,6 +17,8 @@ import { ACTIVE_CONTRACTS, ARENA_ABI, ERC20_ABI } from "@/lib/contracts";
 import { CHAMPIONS, ChampionClass }    from "@/lib/champions";
 import { ChampionArt }                 from "@/components/ChampionArt";
 import { BattleArenaBackground }       from "@/components/BattleArena";
+import BahiaArenaLogo                  from "@/components/BahiaArenaLogo";
+import { useViewMode }                 from "@/lib/viewModeContext";
 
 // ─── Champion card com arena de fundo ─────────────────────────────────────────
 
@@ -47,7 +49,7 @@ function ChampionArenaCard({ cls }: { cls: ChampionClass }) {
 
       {/* Badge de cartas */}
       <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm rounded-full px-1.5 py-0.5">
-        <span className="text-[9px] text-arena-primary font-bold">4 cartas</span>
+        <span className="text-[9px] text-arena-primary font-bold">4 cards</span>
       </div>
 
       {/* Borda colorida do campeão */}
@@ -59,6 +61,7 @@ function ChampionArenaCard({ cls }: { cls: ChampionClass }) {
 // ─── Home ─────────────────────────────────────────────────────────────────────
 
 export default function Home() {
+  const viewMode                  = useViewMode();
   const { address, isConnected } = useAccount();
 
   const { data: deposit } = useReadContract({
@@ -84,22 +87,21 @@ export default function Home() {
     <div className="flex flex-col bg-arena-bg min-h-screen pb-20">
 
       {/* ── HEADER ──────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-4 pt-6 pb-4">
-        <div className="flex items-center gap-2">
-          <span className="text-2xl">🏟️</span>
-          <div>
-            <p className="font-display text-arena-primary text-[11px] leading-tight">BAHIA</p>
-            <p className="font-display text-arena-primary text-[11px] leading-tight">ARENA</p>
-          </div>
-        </div>
+      <div className="flex items-center justify-end px-4 pt-4 pb-2">
         <div className="flex items-center gap-1.5">
           <div className="w-2 h-2 rounded-full bg-arena-success animate-pulse" />
           <span className="text-[10px] text-arena-muted">Celo</span>
         </div>
       </div>
 
+      {/* ── LOGO HERO — only in mobile mode (sidebar already shows logo in desktop) ── */}
+      {viewMode === "mobile" && (
+        <div className="flex justify-center py-3">
+          <BahiaArenaLogo size={148} showWordmark={true} />
+        </div>
+      )}
+
       {/* ── DEMO BATTLE ─────────────────────────────────────────────────────── */}
-      {/* Este bloco deve ser o PRIMEIRO elemento de destaque — sem condicionais */}
       <div className="px-4 mb-5">
         <Link
           to="/demo"
@@ -114,7 +116,7 @@ export default function Home() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-arena-bg font-bold text-xl leading-tight">🎮 DEMO BATTLE</p>
-                <p className="text-arena-bg/70 text-xs mt-0.5 font-medium">Jogar agora — sem carteira</p>
+                <p className="text-arena-bg/70 text-xs mt-0.5 font-medium">Play now — no wallet needed</p>
               </div>
               <div className="text-4xl animate-float">⚔️</div>
             </div>
@@ -130,7 +132,7 @@ export default function Home() {
                 </div>
               ))}
             </div>
-            <p className="text-arena-bg/60 text-[10px] mt-2 text-center">5 campeões · 4 cartas cada · IA adversária</p>
+            <p className="text-arena-bg/60 text-[10px] mt-2 text-center">5 champions · 4 cards each · AI opponent</p>
           </div>
         </Link>
       </div>
@@ -138,8 +140,8 @@ export default function Home() {
       {/* ── CAMPEÕES + ARENAS ───────────────────────────────────────────────── */}
       <div className="px-4 mb-5">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-semibold text-white uppercase tracking-wider">Campeões & Arenas</p>
-          <Link to="/roster" className="text-[11px] text-arena-primary font-semibold">Ver todos →</Link>
+          <p className="text-xs font-semibold text-white uppercase tracking-wider">Champions & Arenas</p>
+          <Link to="/roster" className="text-[11px] text-arena-primary font-semibold">View all →</Link>
         </div>
 
         {/* Grade 2 colunas */}
@@ -159,8 +161,8 @@ export default function Home() {
             />
             <span className="text-4xl relative">⚔️</span>
             <div className="relative text-center px-3">
-              <p className="text-arena-primary text-xs font-bold">Arena PvP</p>
-              <p className="text-white/50 text-[10px] mt-0.5">Batalhas on-chain</p>
+              <p className="text-arena-primary text-xs font-bold">PvP Arena</p>
+              <p className="text-white/50 text-[10px] mt-0.5">On-chain battles</p>
             </div>
           </Link>
         </div>
@@ -176,7 +178,7 @@ export default function Home() {
         <div className="mx-4 mb-4 rounded-2xl bg-arena-surface border border-arena-border p-4">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <p className="text-[10px] text-arena-muted uppercase tracking-wider">Saldo</p>
+              <p className="text-[10px] text-arena-muted uppercase tracking-wider">Balance</p>
               <p className="text-lg font-bold text-arena-primary tabular-nums">
                 {usdtFmt} <span className="text-sm text-arena-muted font-normal">USDT</span>
               </p>
@@ -192,12 +194,12 @@ export default function Home() {
           {hasDeposit ? (
             <Link to="/arena"
               className="block w-full py-3 rounded-xl bg-arena-primary text-arena-bg text-sm font-bold text-center active:scale-95 transition-transform">
-              ⚔️ Entrar na Arena
+              ⚔️ Enter the Arena
             </Link>
           ) : (
             <Link to="/roster"
               className="block w-full py-3 rounded-xl bg-arena-primary/10 border border-arena-primary/40 text-arena-primary text-xs font-semibold text-center active:scale-95 transition-transform">
-              Depositar 1 USDT para jogar →
+              Deposit 1 USDT to play →
             </Link>
           )}
         </div>
@@ -205,13 +207,13 @@ export default function Home() {
 
       {/* ── COMO FUNCIONA ───────────────────────────────────────────────────── */}
       <div className="px-4 pb-4">
-        <p className="text-xs font-semibold text-white uppercase tracking-wider mb-3">Como Funciona</p>
+        <p className="text-xs font-semibold text-white uppercase tracking-wider mb-3">How It Works</p>
         <div className="space-y-2">
           {[
-            { n:"1", emoji:"🎮", title:"Jogue o Demo",         desc:"Sem carteira. Escolha um campeão e lute agora.",          color:"bg-yellow-500" },
-            { n:"2", emoji:"💰", title:"Deposite 1 USDT",      desc:"Entra no Aave V3 e gera rendimento automaticamente.",     color:"bg-green-500"  },
-            { n:"3", emoji:"🃏", title:"Batalhas de Cartas",   desc:"3 básicas + 1 ultimate por campeão. Até 2 cartas por turno.", color:"bg-blue-500" },
-            { n:"4", emoji:"🏆", title:"Ranking Mensal",       desc:"Top 10 dividem 60% do yield. Saque a qualquer momento.",  color:"bg-purple-500" },
+            { n:"1", emoji:"🎮", title:"Play the Demo",        desc:"No wallet needed. Pick a champion and fight now.",         color:"bg-yellow-500" },
+            { n:"2", emoji:"💰", title:"Deposit 1 USDT",       desc:"Deposited into Aave V3 to generate yield automatically.", color:"bg-green-500"  },
+            { n:"3", emoji:"🃏", title:"Card Battles",         desc:"3 basic + 1 ultimate per champion. Up to 2 cards per turn.", color:"bg-blue-500" },
+            { n:"4", emoji:"🏆", title:"Monthly Ranking",      desc:"Top 10 share 60% of yield. Withdraw anytime.",            color:"bg-purple-500" },
           ].map(s => (
             <div key={s.n} className="flex items-start gap-3 p-3 rounded-xl bg-arena-surface border border-arena-border">
               <div className={`w-7 h-7 rounded-lg ${s.color} flex items-center justify-center shrink-0`}>
@@ -230,7 +232,7 @@ export default function Home() {
           className="mt-4 flex items-center justify-center gap-2 w-full py-4 rounded-2xl bg-arena-primary text-arena-bg font-bold text-base active:scale-95 transition-transform"
           style={{ boxShadow: "0 4px 20px rgba(246,201,14,0.3)" }}
         >
-          🎮 JOGAR DEMO GRATUITO
+          🎮 PLAY FREE DEMO
         </Link>
       </div>
     </div>
