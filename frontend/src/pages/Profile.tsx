@@ -190,7 +190,7 @@ export default function Profile() {
 
   // ── Share text ─────────────────────────────────────────────────────────────
   const rankStr  = rankPts !== undefined ? ` (${String(rankPts as bigint)} pts)` : "";
-  const shareText = `⚔️ Jogando como ${champDef.name} na @BahiaArena!${rankStr} 🏆 Venha desafiar: https://bahiaarena.xyz #CeloArena #Web3Gaming`;
+  const shareText = `⚔️ Playing as ${champDef.name} on @BahiaArena!${rankStr} 🏆 Come challenge me: https://bahiaarena.xyz #CeloArena #Web3Gaming`;
 
   const handleShareTweet = async () => {
     const ok = await shareTweet(shareText);
@@ -349,7 +349,7 @@ export default function Profile() {
                 <p className="text-xs text-[#1d9bf0]">@{xUser.username}</p>
                 {xUser.public_metrics && (
                   <p className="text-[10px] text-arena-muted mt-0.5">
-                    {xUser.public_metrics.followers_count.toLocaleString()} seguidores
+                    {xUser.public_metrics.followers_count.toLocaleString()} followers
                   </p>
                 )}
               </div>
@@ -369,15 +369,15 @@ export default function Profile() {
               className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-[#1d9bf0]/15 border border-[#1d9bf0]/40 text-[#1d9bf0] text-xs font-semibold active:scale-95 transition-all disabled:opacity-60"
             >
               {tweetSent ? (
-                <>✓ Postado!</>
+                <>✓ Posted!</>
               ) : isTweeting ? (
-                <><span className="w-3.5 h-3.5 rounded-full border-2 border-[#1d9bf0] border-t-transparent animate-spin" /> Postando…</>
+                <><span className="w-3.5 h-3.5 rounded-full border-2 border-[#1d9bf0] border-t-transparent animate-spin" /> Posting…</>
               ) : (
                 <>
                   <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-[#1d9bf0]">
                     <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.261 5.632 5.903-5.632zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
                   </svg>
-                  Postar no X
+                  Post on X
                 </>
               )}
             </button>
@@ -387,7 +387,7 @@ export default function Profile() {
           /* ── Not connected ─────────────────────────────────────────────── */
           <div>
             <p className="text-xs text-arena-muted mb-4">
-              Conecte sua conta X para compartilhar vitórias automaticamente e aparecer no ranking.
+              Connect your X account to share victories and appear on the leaderboard.
             </p>
             <button
               onClick={connectX}
@@ -396,7 +396,7 @@ export default function Profile() {
               <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white">
                 <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.261 5.632 5.903-5.632zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
               </svg>
-              Entrar com X
+              Sign in with X
             </button>
           </div>
         )}
@@ -484,28 +484,29 @@ export default function Profile() {
             </div>
           </div>
         ) : (
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <p className="text-[10px] text-arena-muted">Total Yield Pool</p>
-            {totalYield !== undefined
-              ? <p className="text-lg font-bold text-green-400">
-                  {(Number(totalYield as bigint) / 1e6).toFixed(4)} USDT
-                </p>
-              : <Skeleton className="h-6 w-20" />}
-          </div>
-          <div className="text-right">
-            <p className="text-[10px] text-arena-muted">Next Distribution</p>
-            {secsToMonthEnd !== undefined
-              ? <p className="text-sm font-bold text-white">
-                  {fmtMonthCountdown(Number(secsToMonthEnd as bigint))}
-                </p>
-              : <Skeleton className="h-5 w-16" />}
-          </div>
-        </div>
-
-        <p className="text-[10px] text-arena-muted text-center">
-          Rewards paid directly to your wallet 🔒
-        </p>
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-[10px] text-arena-muted">Total Yield Pool</p>
+                {totalYield !== undefined
+                  ? <p className="text-lg font-bold text-green-400">
+                      {(Number(totalYield as bigint) / 1e6).toFixed(4)} USDT
+                    </p>
+                  : <Skeleton className="h-6 w-20" />}
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] text-arena-muted">Next Distribution</p>
+                {secsToMonthEnd !== undefined
+                  ? <p className="text-sm font-bold text-white">
+                      {fmtMonthCountdown(Number(secsToMonthEnd as bigint))}
+                    </p>
+                  : <Skeleton className="h-5 w-16" />}
+              </div>
+            </div>
+            <p className="text-[10px] text-arena-muted text-center">
+              Rewards paid directly to your wallet 🔒
+            </p>
+          </>
         )}
       </section>
 
