@@ -162,6 +162,13 @@ function PlayerRow({
       {/* Info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+          {player.xAvatar && (
+            <img
+              src={player.xAvatar}
+              alt={player.username}
+              className="w-5 h-5 rounded-full object-cover shrink-0 border border-[#1d9bf0]/30"
+            />
+          )}
           <span className="text-sm font-bold text-white truncate">{player.username}</span>
           {isMe && <span className="text-[10px] text-arena-primary font-semibold">(você)</span>}
           {player.xHandle && (

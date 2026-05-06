@@ -27,7 +27,12 @@ export interface DifficultyBreakdown {
 export interface PlayerProfile {
   address:    string;
   username:   string;
-  xHandle?:   string;       // without @
+  // ── X / Twitter identity (OAuth-verified) ─────────────────────────────────
+  xHandle?:   string;       // @handle without @
+  xAvatar?:   string;       // profile_image_url from X API
+  xId?:       string;       // X user ID (for deduplication)
+  xName?:     string;       // Display name from X (e.g. "Benjamin Bauer")
+  // ─────────────────────────────────────────────────────────────────────────
   points:     number;
   wins:       number;
   losses:     number;
@@ -337,4 +342,34 @@ export function ensureSeedData(): void {
   const existing = getAllProfiles();
   localStorage.setItem(PK,       JSON.stringify([...existing, ...seeds]));
   localStorage.setItem(SEED_KEY, "1");
+}
+
+// ─── Sync X identity into a profile ──────────────────────────────────────────
+
+export interface XIdentity {
+  id:                string;
+  username:          string;
+  name:              string;
+  profile_image_url?: string;
+}
+
+/**
+ * Writes X OAuth data into the player profile.
+ * Returns the updated profile, or null if the profile doesn't exist yet.
+ */
+export function syncXToProfile(address: string, x: XIdentity): PlayerProfile | null {
+  const profile = getProfile(address);
+  if (!profile) return null;
+
+  const updated: PlayerProfile = {
+    ...profile,
+    xHandle: x.username,
+    xAvatar: x.profile_image_url
+      ? x.profile_image_url.replace("_normal", "_bigger")
+      : profile.xAvatar,
+    xId:    x.id,
+    xName:  x.name,
+  };
+  saveProfile(updated);
+  return updated;
 }

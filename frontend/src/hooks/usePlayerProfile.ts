@@ -5,8 +5,10 @@ import {
   createProfile,
   recordMatch,
   usernameAvailable,
+  syncXToProfile,
   type PlayerProfile,
   type Difficulty,
+  type XIdentity,
 } from "@/lib/playerStore";
 
 export function usePlayerProfile() {
@@ -60,6 +62,16 @@ export function usePlayerProfile() {
     [address],
   );
 
+  /**
+   * Syncs verified X OAuth data (handle, avatar, name) into the player profile.
+   * Safe to call even when X reconnects — only updates X fields, never points.
+   */
+  const syncXProfile = useCallback((x: XIdentity) => {
+    if (!address) return;
+    const updated = syncXToProfile(address, x);
+    if (updated) setProfile(updated);
+  }, [address]);
+
   return {
     profile,
     hasProfile,
@@ -69,6 +81,7 @@ export function usePlayerProfile() {
     setupProfile,
     addMatchResult,
     checkUsername,
+    syncXProfile,
     refresh,
   };
 }

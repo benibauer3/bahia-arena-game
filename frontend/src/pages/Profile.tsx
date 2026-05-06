@@ -40,7 +40,7 @@ function Skeleton({ className = "" }: { className?: string }) {
 // ─── Profile Page ─────────────────────────────────────────────────────────────
 export default function Profile() {
   const { address, isConnected } = useAccount();
-  const { profile, hasProfile, setupProfile, refresh } = usePlayerProfile();
+  const { profile, hasProfile, setupProfile, syncXProfile, refresh } = usePlayerProfile();
 
   // ── X OAuth ────────────────────────────────────────────────────────────────
   const {
@@ -55,6 +55,14 @@ export default function Profile() {
   } = useXAuth();
 
   const [tweetSent, setTweetSent] = useState(false);
+
+  // When X connects (or reconnects after OAuth redirect), sync data into the
+  // player profile so avatar / handle / name are always up-to-date.
+  useEffect(() => {
+    if (xConnected && xUser && hasProfile) {
+      syncXProfile(xUser);
+    }
+  }, [xConnected, xUser, hasProfile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Username inline edit ───────────────────────────────────────────────────
   const [usernameEditing, setUsernameEditing] = useState(false);

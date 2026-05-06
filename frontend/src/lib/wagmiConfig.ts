@@ -1,35 +1,32 @@
 import { createConfig, http } from "wagmi";
 import { injected, coinbaseWallet } from "wagmi/connectors";
-import { defineChain } from "viem";
+// Use viem's built-in Celo chains — they include CIP-64 transaction formatters
+// (feeCurrency support) required for correct gas estimation and fee abstraction.
+// A manual defineChain() lacks these formatters, causing "Unavailable" gas in wallets.
+import {
+  celo        as viemCelo,
+  celoAlfajores as viemCeloAlfajores,
+} from "viem/chains";
 
 // ─── Celo chains ──────────────────────────────────────────────────────────────
+// Re-export under the same names the rest of the codebase uses, so no other
+// file needs to change.  We keep forno.celo.org as the primary RPC endpoint.
 
-export const celo = defineChain({
-  id: 42220,
-  name: "Celo",
-  nativeCurrency: { name: "CELO", symbol: "CELO", decimals: 18 },
+export const celo = {
+  ...viemCelo,
   rpcUrls: {
     default: { http: ["https://forno.celo.org"] },
     public:  { http: ["https://forno.celo.org"] },
   },
-  blockExplorers: {
-    default: { name: "Celoscan", url: "https://celoscan.io" },
-  },
-});
+} as typeof viemCelo;
 
-export const celoAlfajores = defineChain({
-  id: 44787,
-  name: "Celo Alfajores",
-  nativeCurrency: { name: "CELO", symbol: "CELO", decimals: 18 },
+export const celoAlfajores = {
+  ...viemCeloAlfajores,
   rpcUrls: {
     default: { http: ["https://alfajores-forno.celo-testnet.org"] },
     public:  { http: ["https://alfajores-forno.celo-testnet.org"] },
   },
-  blockExplorers: {
-    default: { name: "Celoscan Alfajores", url: "https://alfajores.celoscan.io" },
-  },
-  testnet: true,
-});
+} as typeof viemCeloAlfajores;
 
 const IS_TESTNET      = import.meta.env.VITE_NETWORK === "alfajores";
 export const activeChain = IS_TESTNET ? celoAlfajores : celo;
