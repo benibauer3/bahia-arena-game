@@ -6,6 +6,7 @@ import { ACTIVE_CONTRACTS, ARENA_ABI, CHAMPION_ABI, ERC20_ABI } from "@/lib/cont
 import ChampionCard from "@/components/ChampionCard";
 import { ChampionArt } from "@/components/ChampionArt";
 import { useRequireCelo } from "@/hooks/useRequireCelo";
+import { activeChain } from "@/lib/wagmiConfig";
 
 // ─── Deposit Widget (3-state) ─────────────────────────────────────────────────
 function DepositWidget() {
@@ -57,18 +58,20 @@ function DepositWidget() {
       await switchToCelo();
 
       await writeContractAsync({
-        address: ACTIVE_CONTRACTS.usdt,
-        abi: ERC20_ABI,
+        address:  ACTIVE_CONTRACTS.usdt,
+        abi:      ERC20_ABI,
         functionName: "approve",
-        args: [ACTIVE_CONTRACTS.ArenaManager, fee],
+        args:     [ACTIVE_CONTRACTS.ArenaManager, fee],
+        chainId:  activeChain.id,   // ← force Celo
       });
       setStatus("approved");
       setStatus("depositing");
       await writeContractAsync({
-        address: ACTIVE_CONTRACTS.ArenaManager,
-        abi: ARENA_ABI,
+        address:  ACTIVE_CONTRACTS.ArenaManager,
+        abi:      ARENA_ABI,
         functionName: "deposit",
-        args: [],
+        args:     [],
+        chainId:  activeChain.id,   // ← force Celo
       });
       setStatus("done");
       refetchDeposit();
@@ -87,10 +90,11 @@ function DepositWidget() {
       await switchToCelo();
 
       await writeContractAsync({
-        address: ACTIVE_CONTRACTS.ArenaManager,
-        abi: ARENA_ABI,
+        address:  ACTIVE_CONTRACTS.ArenaManager,
+        abi:      ARENA_ABI,
         functionName: "withdraw",
-        args: [],
+        args:     [],
+        chainId:  activeChain.id,   // ← force Celo
       });
       setStatus("idle");
       refetchDeposit();

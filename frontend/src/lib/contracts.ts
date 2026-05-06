@@ -16,8 +16,9 @@ export const CONTRACTS = {
   },
 } as const;
 
-const network = (import.meta.env.VITE_NETWORK as keyof typeof CONTRACTS) ?? "alfajores";
-export const ACTIVE_CONTRACTS = CONTRACTS[network] ?? CONTRACTS.alfajores;
+// Default to "celo" (mainnet) — set VITE_NETWORK=alfajores only for testnet builds
+const network = (import.meta.env.VITE_NETWORK as keyof typeof CONTRACTS) ?? "celo";
+export const ACTIVE_CONTRACTS = CONTRACTS[network] ?? CONTRACTS.celo;
 
 // ─── GoodDollar Constants ─────────────────────────────────────────────────────
 export const GOODDOLLAR_IDENTITY = "0xC361A6E67822a0EDc17D899227dd9FC50BD62F42" as `0x${string}`;
