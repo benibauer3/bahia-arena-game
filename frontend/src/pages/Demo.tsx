@@ -18,6 +18,7 @@ import { useBattleCards, Difficulty }   from "@/hooks/useBattleCards";
 import { CHAMPION_CARDS, BASE_HP, BASE_SHIELD, type TurnLog } from "@/lib/championCards";
 import BahiaArenaLogo                   from "@/components/BahiaArenaLogo";
 import { usePlayerProfile }             from "@/hooks/usePlayerProfile";
+import { DIFF_PTS, STREAK_BONUS }       from "@/lib/playerStore";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -141,10 +142,33 @@ interface SetupConfig {
   arena:      ArenaTheme;
 }
 
-const DIFFICULTIES: { id: Difficulty; label: string; emoji: string; desc: string; color: string }[] = [
-  { id: "easy",   label: "Easy",   emoji: "🟢", desc: "AI plays 1 card · no ultimate",    color: "border-emerald-500 bg-emerald-500/10 text-emerald-400" },
-  { id: "medium", label: "Medium", emoji: "🟡", desc: "AI plays 2 cards · uses ultimate", color: "border-amber-400  bg-amber-400/10  text-amber-300"   },
-  { id: "hard",   label: "Hard",   emoji: "🔴", desc: "Tactical AI · aggressive ultimate", color: "border-red-500   bg-red-500/10   text-red-400"     },
+const DIFFICULTIES: {
+  id:    Difficulty;
+  label: string;
+  emoji: string;
+  desc:  string;
+  color: string;
+}[] = [
+  {
+    id: "easy",   label: "Easy",      emoji: "🟢",
+    desc:  "IA joga 1 carta · sem ultimate",
+    color: "border-emerald-500 bg-emerald-500/10 text-emerald-400",
+  },
+  {
+    id: "medium", label: "Medium",    emoji: "🟡",
+    desc:  "IA joga 2 cartas · usa ultimate",
+    color: "border-amber-400  bg-amber-400/10  text-amber-300",
+  },
+  {
+    id: "hard",   label: "Hard",      emoji: "🔴",
+    desc:  "IA tática · ultimate agressivo",
+    color: "border-red-500   bg-red-500/10   text-red-400",
+  },
+  {
+    id: "legendary", label: "Legendary", emoji: "⭐",
+    desc:  "IA perfeita · sem misericórdia",
+    color: "border-arena-primary bg-arena-primary/10 text-arena-primary",
+  },
 ];
 
 const ARENAS: { id: ArenaTheme; label: string; emoji: string }[] = [
@@ -203,25 +227,42 @@ function SetupScreen({
 
         {/* Difficulty */}
         <div>
-          <p className="text-xs font-semibold text-white uppercase tracking-wider mb-2">⚙️ Difficulty</p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold text-white uppercase tracking-wider">⚙️ Dificuldade</p>
+            <p className="text-[10px] text-arena-muted">Mais difícil = mais pontos</p>
+          </div>
           <div className="space-y-2">
-            {DIFFICULTIES.map(d => (
+            {DIFFICULTIES.map(d => {
+              const pts   = DIFF_PTS[d.id];
+              const strk  = STREAK_BONUS[d.id];
+              const isSelected = difficulty === d.id;
+              return (
               <button
                 key={d.id}
                 onClick={() => setDifficulty(d.id)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 transition-all active:scale-[0.98]
-                  ${difficulty === d.id ? d.color : "border-arena-border bg-arena-surface text-arena-muted"}`}
+                  ${isSelected ? d.color : "border-arena-border bg-arena-surface text-arena-muted"}`}
               >
-                <span className="text-xl">{d.emoji}</span>
-                <div className="text-left flex-1">
+                <span className="text-xl shrink-0">{d.emoji}</span>
+                <div className="text-left flex-1 min-w-0">
                   <p className="text-sm font-bold leading-tight">{d.label}</p>
                   <p className="text-[10px] opacity-80">{d.desc}</p>
                 </div>
-                {difficulty === d.id && (
+                {/* Point preview */}
+                <div className="text-right shrink-0 text-[10px] leading-snug">
+                  <p className={`font-bold ${isSelected ? "opacity-100" : "opacity-50"}`}>
+                    V +{pts.win}pts
+                  </p>
+                  <p className={`${isSelected ? "opacity-70" : "opacity-40"}`}>
+                    🔥×3 +{strk.s3}
+                  </p>
+                </div>
+                {isSelected && (
                   <span className="text-xs font-bold">✓</span>
                 )}
               </button>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -416,11 +457,14 @@ function BattleScreen({
   const isDefeatB  = phase === "result" && winner === "A";
 
   const DIFF_BADGE: Record<Difficulty, string> = {
-    easy:   "text-emerald-400 bg-emerald-400/10",
-    medium: "text-amber-300  bg-amber-400/10",
-    hard:   "text-red-400    bg-red-500/10",
+    easy:      "text-emerald-400 bg-emerald-400/10",
+    medium:    "text-amber-300  bg-amber-400/10",
+    hard:      "text-red-400    bg-red-500/10",
+    legendary: "text-arena-primary bg-arena-primary/10",
   };
-  const DIFF_LABEL: Record<Difficulty, string> = { easy: "Easy", medium: "Medium", hard: "Hard" };
+  const DIFF_LABEL: Record<Difficulty, string> = {
+    easy: "Easy", medium: "Medium", hard: "Hard", legendary: "⭐ Legendary",
+  };
 
   // HP / shield % for SF top bars
   const hpAPct = Math.max(0, Math.min(100, (playerA.displayHp  / BASE_HP)     * 100));
@@ -676,40 +720,77 @@ function BattleScreen({
       {/* ─── RESULT CTAs — delayed so K.O. banner plays first ──────────── */}
       {phase==="result" && showResultCTAs && (
         <div className="shrink-0 px-3 pt-2 pb-5 flex flex-col gap-2 animate-pop-in">
-          {/* Points earned */}
+
+          {/* Points earned banner */}
           {matchPoints !== null && (
-            <div className="flex items-center justify-center gap-2 py-1.5 rounded-xl bg-arena-primary/10 border border-arena-primary/20">
-              <span className="text-arena-primary font-bold text-sm">+{matchPoints} pts</span>
-              <span className="text-arena-muted text-xs">added to leaderboard</span>
+            <div className={`flex items-center justify-between px-4 py-2.5 rounded-xl border ${
+              winner === "A"
+                ? "bg-arena-primary/10 border-arena-primary/30"
+                : winner === "B"
+                  ? "bg-white/5 border-white/10"
+                  : "bg-cyan-500/10 border-cyan-500/20"
+            }`}>
+              <div>
+                <span className={`font-bold text-base ${
+                  winner === "A" ? "text-arena-primary" :
+                  winner === "B" ? "text-arena-muted"   : "text-cyan-400"
+                }`}>
+                  {winner === "A" ? "🏆" : winner === "B" ? "💀" : "🤝"}{" "}
+                  +{matchPoints} pts
+                </span>
+                <p className="text-[10px] text-arena-muted mt-0.5">
+                  {DIFF_PTS[difficulty].win === matchPoints && winner === "A"
+                    ? `Vitória ${difficulty} sem bônus`
+                    : winner === "A" && matchPoints > DIFF_PTS[difficulty].win
+                      ? `+${matchPoints - DIFF_PTS[difficulty].win} pts de streak!`
+                      : "Pontos adicionados"}
+                </p>
+              </div>
+              <Link
+                to="/leaderboard"
+                className="text-[10px] text-arena-primary font-semibold underline underline-offset-2 shrink-0"
+              >
+                Ver ranking →
+              </Link>
             </div>
           )}
+
           {/* X share */}
           {winner === "A" && (
             <button
               onClick={() => {
                 const profile = playerProfile;
+                const diffLabel = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
                 const text = profile
-                  ? `🏆 Just won with ${champA.name} in @BahiaArenaGame!\n+${matchPoints ?? 10} pts${profile.streak > 1 ? ` 🔥 ${profile.streak}x streak` : ""} | #BahiaArena #Web3Gaming #Celo`
-                  : `🏆 Just beat the AI with ${champA.name} in @BahiaArenaGame! #BahiaArena #Web3Gaming #Celo`;
+                  ? `🏆 Venci no nível ${diffLabel} com ${champA.name} na @BahiaArena! +${matchPoints ?? DIFF_PTS[difficulty].win} pts${profile.streak > 1 ? ` 🔥 ${profile.streak}x streak` : ""} #BahiaArena #Celo`
+                  : `🏆 Bati a IA no nível ${diffLabel} com ${champA.name} na @BahiaArena! #BahiaArena #Web3Gaming #Celo`;
                 window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
               }}
               className="w-full py-2.5 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 active:scale-95 transition-transform"
               style={{ background: "#000", border: "1px solid #333" }}
             >
-              <span className="text-base font-bold">𝕏</span> Share victory
+              <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white">
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.261 5.632 5.903-5.632zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+              </svg>
+              Compartilhar vitória
             </button>
           )}
+
           {!isConnected && (
-            <p className="text-center text-[10px] text-arena-muted">Connect wallet to save points to leaderboard</p>
+            <p className="text-center text-[10px] text-arena-muted px-2">
+              Conecte sua carteira para salvar pontos no ranking permanentemente
+            </p>
           )}
+
           <button onClick={onReset}
             className="w-full py-3 rounded-xl text-sm font-semibold text-white active:scale-95 transition-transform"
             style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)"}}>
-            🔄 Play Again
+            🔄 Jogar Novamente
           </button>
-          <Link to="/arena"
-            className="block w-full py-3.5 rounded-xl bg-arena-primary text-arena-bg font-bold text-sm text-center active:scale-95 transition-transform shadow-lg shadow-arena-primary/30">
-            ⚔️ Enter the Real Arena
+
+          <Link to="/leaderboard"
+            className="block w-full py-3 rounded-xl font-bold text-sm text-center active:scale-95 transition-transform border border-arena-primary/40 text-arena-primary">
+            🏆 Ver Ranking
           </Link>
         </div>
       )}

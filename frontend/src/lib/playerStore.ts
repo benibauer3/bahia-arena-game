@@ -1,117 +1,196 @@
+/**
+ * playerStore.ts — MVP Season (AI battles)
+ *
+ * Point system — scales with difficulty so hard matches matter most:
+ *
+ *  Difficulty | Win | Draw | Loss | Streak ×3 | Streak ×5 | Streak ×10
+ *  -----------|-----|------|------|-----------|-----------|----------
+ *  Easy       |   5 |    2 |    1 |        +3 |        +6 |       +12
+ *  Medium     |  15 |    5 |    2 |        +8 |       +15 |       +30
+ *  Hard       |  30 |   10 |    3 |       +15 |       +30 |       +60
+ *  Legendary  |  60 |   20 |    5 |       +30 |       +60 |      +120
+ *
+ * Top 10 players share the monthly pool on the 30th of each month.
+ */
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type Difficulty = "easy" | "medium" | "hard" | "legendary";
+
+export interface DifficultyBreakdown {
+  easy:      number;
+  medium:    number;
+  hard:      number;
+  legendary: number;
+}
+
 export interface PlayerProfile {
-  address: string;
-  username: string;
-  xHandle?: string;        // without @
-  points: number;
-  wins: number;
-  losses: number;
-  draws: number;
-  streak: number;
+  address:    string;
+  username:   string;
+  xHandle?:   string;       // without @
+  points:     number;
+  wins:       number;
+  losses:     number;
+  draws:      number;
+  streak:     number;
   bestStreak: number;
   lastActive: number;
-  joinedAt: number;
+  joinedAt:   number;
+  // Per-difficulty win breakdown (MVP season)
+  winsByDiff: DifficultyBreakdown;
 }
 
 export interface MatchRecord {
-  id: string;
-  address: string;
-  result: "win" | "loss" | "draw";
-  myChampion: string;
+  id:               string;
+  address:          string;
+  result:           "win" | "loss" | "draw";
+  myChampion:       string;
   opponentChampion: string;
-  arena: string;
-  difficulty: string;
-  pointsEarned: number;
-  timestamp: number;
+  arena:            string;
+  difficulty:       Difficulty;
+  pointsEarned:     number;
+  timestamp:        number;
 }
 
-export const PTS = { win: 10, draw: 5, loss: 2, streak3: 3, streak5: 8, hardBonus: 3 };
+// ─── Point tables ─────────────────────────────────────────────────────────────
 
-const PK = "bha-profiles-v1";
-const MK = "bha-matches-v1";
+export const DIFF_PTS: Record<Difficulty, { win: number; draw: number; loss: number }> = {
+  easy:      { win:  5, draw:  2, loss: 1 },
+  medium:    { win: 15, draw:  5, loss: 2 },
+  hard:      { win: 30, draw: 10, loss: 3 },
+  legendary: { win: 60, draw: 20, loss: 5 },
+};
+
+export const STREAK_BONUS: Record<Difficulty, { s3: number; s5: number; s10: number }> = {
+  easy:      { s3:  3, s5:  6, s10:  12 },
+  medium:    { s3:  8, s5: 15, s10:  30 },
+  hard:      { s3: 15, s5: 30, s10:  60 },
+  legendary: { s3: 30, s5: 60, s10: 120 },
+};
+
+/** Legacy export — kept for Leaderboard PointsGuide backward compat */
+export const PTS = {
+  win:       DIFF_PTS.medium.win,
+  draw:      DIFF_PTS.medium.draw,
+  loss:      DIFF_PTS.medium.loss,
+  streak3:   STREAK_BONUS.medium.s3,
+  streak5:   STREAK_BONUS.medium.s5,
+  hardBonus: DIFF_PTS.hard.win - DIFF_PTS.medium.win,
+};
+
+// ─── Storage keys ─────────────────────────────────────────────────────────────
+
+const PK = "bha-profiles-v2";    // bumped to v2 for new schema
+const MK = "bha-matches-v2";
+
+// ─── Profile CRUD ─────────────────────────────────────────────────────────────
+
+function defaultWinsByDiff(): DifficultyBreakdown {
+  return { easy: 0, medium: 0, hard: 0, legendary: 0 };
+}
 
 export function getAllProfiles(): PlayerProfile[] {
   try {
-    return JSON.parse(localStorage.getItem(PK) ?? "[]") as PlayerProfile[];
+    const raw = JSON.parse(localStorage.getItem(PK) ?? "[]") as PlayerProfile[];
+    // Ensure winsByDiff exists on every profile (migration guard)
+    return raw.map(p => ({ ...p, winsByDiff: p.winsByDiff ?? defaultWinsByDiff() }));
   } catch {
     return [];
   }
 }
 
 export function getProfile(address: string): PlayerProfile | null {
-  return getAllProfiles().find(p => p.address.toLowerCase() === address.toLowerCase()) ?? null;
+  return getAllProfiles().find(
+    p => p.address.toLowerCase() === address.toLowerCase()
+  ) ?? null;
 }
 
 export function saveProfile(p: PlayerProfile): void {
-  const all = getAllProfiles().filter(x => x.address.toLowerCase() !== p.address.toLowerCase());
+  const all = getAllProfiles().filter(
+    x => x.address.toLowerCase() !== p.address.toLowerCase()
+  );
   localStorage.setItem(PK, JSON.stringify([...all, p]));
 }
 
-export function createProfile(address: string, username: string, xHandle?: string): PlayerProfile {
+export function createProfile(
+  address:  string,
+  username: string,
+  xHandle?: string,
+): PlayerProfile {
   const now = Date.now();
   const p: PlayerProfile = {
     address,
-    username: username.trim(),
-    xHandle: xHandle?.replace(/^@/, "").trim() || undefined,
-    points: 0,
-    wins: 0,
-    losses: 0,
-    draws: 0,
-    streak: 0,
+    username:   username.trim(),
+    xHandle:    xHandle?.replace(/^@/, "").trim() || undefined,
+    points:     0,
+    wins:       0,
+    losses:     0,
+    draws:      0,
+    streak:     0,
     bestStreak: 0,
     lastActive: now,
-    joinedAt: now,
+    joinedAt:   now,
+    winsByDiff: defaultWinsByDiff(),
   };
   saveProfile(p);
   return p;
 }
 
 export function usernameAvailable(username: string): boolean {
-  return !getAllProfiles().some(p => p.username.toLowerCase() === username.trim().toLowerCase());
+  return !getAllProfiles().some(
+    p => p.username.toLowerCase() === username.trim().toLowerCase()
+  );
 }
 
+// ─── Record a match ───────────────────────────────────────────────────────────
+
 export function recordMatch(
-  address: string,
-  result: "win" | "loss" | "draw",
-  myChampion: string,
+  address:          string,
+  result:           "win" | "loss" | "draw",
+  myChampion:       string,
   opponentChampion: string,
-  arena: string,
-  difficulty: string,
+  arena:            string,
+  difficulty:       Difficulty,
 ): { pointsEarned: number; newProfile: PlayerProfile } | null {
+
   const profile = getProfile(address);
   if (!profile) return null;
 
-  let pointsEarned = PTS[result];
-  let newStreak = profile.streak;
+  const pts    = DIFF_PTS[difficulty];
+  const streak = STREAK_BONUS[difficulty];
+
+  let pointsEarned = pts[result];
+  let newStreak    = profile.streak;
 
   if (result === "win") {
-    newStreak = profile.streak + 1;
-    if (newStreak >= 5) {
-      pointsEarned += PTS.streak5;
-    } else if (newStreak >= 3) {
-      pointsEarned += PTS.streak3;
-    }
-    if (difficulty === "hard") {
-      pointsEarned += PTS.hardBonus;
-    }
+    newStreak += 1;
+    // Streak bonus — only the highest tier applies
+    if (newStreak >= 10) pointsEarned += streak.s10;
+    else if (newStreak >= 5) pointsEarned += streak.s5;
+    else if (newStreak >= 3) pointsEarned += streak.s3;
   } else {
     newStreak = 0;
   }
 
+  const updatedWinsByDiff: DifficultyBreakdown = { ...profile.winsByDiff };
+  if (result === "win") updatedWinsByDiff[difficulty] += 1;
+
   const newProfile: PlayerProfile = {
     ...profile,
-    points: profile.points + pointsEarned,
-    wins: result === "win" ? profile.wins + 1 : profile.wins,
-    losses: result === "loss" ? profile.losses + 1 : profile.losses,
-    draws: result === "draw" ? profile.draws + 1 : profile.draws,
-    streak: newStreak,
+    points:     profile.points + pointsEarned,
+    wins:       result === "win"  ? profile.wins  + 1 : profile.wins,
+    losses:     result === "loss" ? profile.losses + 1 : profile.losses,
+    draws:      result === "draw" ? profile.draws  + 1 : profile.draws,
+    streak:     newStreak,
     bestStreak: Math.max(profile.bestStreak, newStreak),
     lastActive: Date.now(),
+    winsByDiff: updatedWinsByDiff,
   };
 
   saveProfile(newProfile);
 
   const match: MatchRecord = {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    id:               `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     address,
     result,
     myChampion,
@@ -128,6 +207,8 @@ export function recordMatch(
   return { pointsEarned, newProfile };
 }
 
+// ─── Match history ────────────────────────────────────────────────────────────
+
 export function getAllMatches(): MatchRecord[] {
   try {
     return JSON.parse(localStorage.getItem(MK) ?? "[]") as MatchRecord[];
@@ -137,36 +218,96 @@ export function getAllMatches(): MatchRecord[] {
 }
 
 export function getPlayerMatches(address: string, limit = 5): MatchRecord[] {
-  const all = getAllMatches();
-  return all
+  return getAllMatches()
     .filter(m => m.address.toLowerCase() === address.toLowerCase())
     .sort((a, b) => b.timestamp - a.timestamp)
     .slice(0, limit);
 }
 
+// ─── Leaderboard ──────────────────────────────────────────────────────────────
+
 export function getLeaderboard(): PlayerProfile[] {
-  return getAllProfiles().sort((a, b) => b.points - a.points || b.wins - a.wins);
+  return getAllProfiles()
+    .sort((a, b) =>
+      b.points - a.points ||
+      b.wins   - a.wins   ||
+      // Tiebreak: favor higher-difficulty wins
+      (b.winsByDiff.legendary + b.winsByDiff.hard) -
+      (a.winsByDiff.legendary + a.winsByDiff.hard)
+    );
 }
 
-const SEED_KEY = "bha-seeds-v1";
+// ─── Seed data (MVP showcase) ────────────────────────────────────────────────
+
+const SEED_KEY = "bha-seeds-v2";
 
 export function ensureSeedData(): void {
-  const all = getAllProfiles();
-  if (all.some(p => p.address.startsWith("0xSEED"))) return;
+  if (localStorage.getItem(SEED_KEY)) return;
 
   const seeds: PlayerProfile[] = [
-    { address: "0xSEED01", username: "CurupiraKing",  xHandle: "curupirabtc",  points: 247, wins: 24, losses: 8,  draws: 2, streak: 3, bestStreak: 7, lastActive: Date.now(), joinedAt: Date.now() },
-    { address: "0xSEED02", username: "IaraMystic",    xHandle: "iaramystic",   points: 198, wins: 19, losses: 9,  draws: 4, streak: 1, bestStreak: 5, lastActive: Date.now(), joinedAt: Date.now() },
-    { address: "0xSEED03", username: "BoltMaster",    xHandle: undefined,      points: 174, wins: 17, losses: 11, draws: 1, streak: 0, bestStreak: 4, lastActive: Date.now(), joinedAt: Date.now() },
-    { address: "0xSEED04", username: "BoitatáFire",   xHandle: "boitataweb3",  points: 143, wins: 14, losses: 12, draws: 3, streak: 2, bestStreak: 3, lastActive: Date.now(), joinedAt: Date.now() },
-    { address: "0xSEED05", username: "AnhangaShadow", xHandle: undefined,      points: 121, wins: 11, losses: 8,  draws: 5, streak: 0, bestStreak: 4, lastActive: Date.now(), joinedAt: Date.now() },
-    { address: "0xSEED06", username: "TupãStorm",     xHandle: "tupastorm",    points: 98,  wins: 9,  losses: 10, draws: 2, streak: 1, bestStreak: 2, lastActive: Date.now(), joinedAt: Date.now() },
-    { address: "0xSEED07", username: "web3warrior",   xHandle: undefined,      points: 76,  wins: 7,  losses: 9,  draws: 1, streak: 0, bestStreak: 2, lastActive: Date.now(), joinedAt: Date.now() },
-    { address: "0xSEED08", username: "celonaut",      xHandle: "celonaut",     points: 54,  wins: 5,  losses: 8,  draws: 2, streak: 0, bestStreak: 1, lastActive: Date.now(), joinedAt: Date.now() },
-    { address: "0xSEED09", username: "chainbrawler",  xHandle: undefined,      points: 38,  wins: 3,  losses: 7,  draws: 3, streak: 0, bestStreak: 1, lastActive: Date.now(), joinedAt: Date.now() },
-    { address: "0xSEED10", username: "bahiadegen",    xHandle: "bahiadegen",   points: 22,  wins: 2,  losses: 9,  draws: 1, streak: 0, bestStreak: 1, lastActive: Date.now(), joinedAt: Date.now() },
+    {
+      address: "0xSEED01", username: "CurupiraKing",  xHandle: "curupirabtc",
+      points: 1240, wins: 42, losses:  8, draws: 2, streak: 5, bestStreak: 8,
+      lastActive: Date.now(), joinedAt: Date.now(),
+      winsByDiff: { easy: 10, medium: 18, hard: 11, legendary: 3 },
+    },
+    {
+      address: "0xSEED02", username: "IaraMystic",    xHandle: "iaramystic",
+      points: 980,  wins: 35, losses: 10, draws: 4, streak: 3, bestStreak: 6,
+      lastActive: Date.now(), joinedAt: Date.now(),
+      winsByDiff: { easy: 8, medium: 16, hard: 9, legendary: 2 },
+    },
+    {
+      address: "0xSEED03", username: "LegendSlayer",  xHandle: undefined,
+      points: 820,  wins: 28, losses: 12, draws: 1, streak: 2, bestStreak: 5,
+      lastActive: Date.now(), joinedAt: Date.now(),
+      winsByDiff: { easy: 5, medium: 12, hard: 8, legendary: 3 },
+    },
+    {
+      address: "0xSEED04", username: "BoitatáFire",   xHandle: "boitataweb3",
+      points: 670,  wins: 24, losses: 13, draws: 3, streak: 1, bestStreak: 4,
+      lastActive: Date.now(), joinedAt: Date.now(),
+      winsByDiff: { easy: 7, medium: 10, hard: 6, legendary: 1 },
+    },
+    {
+      address: "0xSEED05", username: "AnhangaShadow", xHandle: undefined,
+      points: 510,  wins: 20, losses:  9, draws: 5, streak: 0, bestStreak: 4,
+      lastActive: Date.now(), joinedAt: Date.now(),
+      winsByDiff: { easy: 6, medium: 9, hard: 5, legendary: 0 },
+    },
+    {
+      address: "0xSEED06", username: "TupãStorm",     xHandle: "tupastorm",
+      points: 380,  wins: 16, losses: 11, draws: 2, streak: 2, bestStreak: 3,
+      lastActive: Date.now(), joinedAt: Date.now(),
+      winsByDiff: { easy: 5, medium: 7, hard: 4, legendary: 0 },
+    },
+    {
+      address: "0xSEED07", username: "web3warrior",   xHandle: undefined,
+      points: 270,  wins: 12, losses: 10, draws: 1, streak: 0, bestStreak: 3,
+      lastActive: Date.now(), joinedAt: Date.now(),
+      winsByDiff: { easy: 4, medium: 6, hard: 2, legendary: 0 },
+    },
+    {
+      address: "0xSEED08", username: "celonaut",      xHandle: "celonaut",
+      points: 175,  wins:  9, losses:  9, draws: 2, streak: 0, bestStreak: 2,
+      lastActive: Date.now(), joinedAt: Date.now(),
+      winsByDiff: { easy: 3, medium: 5, hard: 1, legendary: 0 },
+    },
+    {
+      address: "0xSEED09", username: "chainbrawler",  xHandle: undefined,
+      points: 95,   wins:  6, losses:  8, draws: 3, streak: 0, bestStreak: 2,
+      lastActive: Date.now(), joinedAt: Date.now(),
+      winsByDiff: { easy: 3, medium: 3, hard: 0, legendary: 0 },
+    },
+    {
+      address: "0xSEED10", username: "bahiadegen",    xHandle: "bahiadegen",
+      points: 45,   wins:  3, losses: 10, draws: 1, streak: 0, bestStreak: 1,
+      lastActive: Date.now(), joinedAt: Date.now(),
+      winsByDiff: { easy: 2, medium: 1, hard: 0, legendary: 0 },
+    },
   ];
 
   const existing = getAllProfiles();
-  localStorage.setItem(PK, JSON.stringify([...existing, ...seeds]));
+  localStorage.setItem(PK,       JSON.stringify([...existing, ...seeds]));
+  localStorage.setItem(SEED_KEY, "1");
 }

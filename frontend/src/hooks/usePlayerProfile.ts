@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAccount } from "wagmi";
-import { getProfile, createProfile, recordMatch, usernameAvailable, type PlayerProfile } from "@/lib/playerStore";
+import { getProfile, createProfile, recordMatch, usernameAvailable, type PlayerProfile, type Difficulty } from "@/lib/playerStore";
 
 export function usePlayerProfile() {
   const { address, isConnected } = useAccount();
@@ -24,7 +24,7 @@ export function usePlayerProfile() {
     myChampion: string,
     opponentChampion: string,
     arena: string,
-    difficulty: string,
+    difficulty: Difficulty,
   ) => {
     if (!address) return null;
     const res = recordMatch(address, result, myChampion, opponentChampion, arena, difficulty);
