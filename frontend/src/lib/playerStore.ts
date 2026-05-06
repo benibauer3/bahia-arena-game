@@ -80,8 +80,29 @@ export const PTS = {
 
 // ─── Storage keys ─────────────────────────────────────────────────────────────
 
-const PK = "bha-profiles-v2";    // bumped to v2 for new schema
+const PK = "bha-profiles-v2";
 const MK = "bha-matches-v2";
+
+// ─── v1 → v2 migration (runs once on module load) ────────────────────────────
+// Previous schema didn't have winsByDiff. We lift all v1 profiles into v2 so
+// no one loses their username / points after the schema bump.
+(function migrateV1() {
+  if (localStorage.getItem(PK)) return;          // v2 already exists
+  const raw = localStorage.getItem("bha-profiles-v1");
+  if (!raw) return;
+  try {
+    const old = JSON.parse(raw) as Record<string, unknown>[];
+    const migrated = old.map(p => ({
+      ...p,
+      winsByDiff: (p.winsByDiff as DifficultyBreakdown | undefined)
+        ?? { easy: 0, medium: 0, hard: 0, legendary: 0 },
+    }));
+    localStorage.setItem(PK, JSON.stringify(migrated));
+  } catch { /* ignore corrupt data */ }
+  // Also migrate matches
+  const rawM = localStorage.getItem("bha-matches-v1");
+  if (rawM && !localStorage.getItem(MK)) localStorage.setItem(MK, rawM);
+})();
 
 // ─── Profile CRUD ─────────────────────────────────────────────────────────────
 
@@ -136,10 +157,16 @@ export function createProfile(
   return p;
 }
 
-export function usernameAvailable(username: string): boolean {
-  return !getAllProfiles().some(
-    p => p.username.toLowerCase() === username.trim().toLowerCase()
-  );
+/**
+ * Returns true if the username is free to use.
+ * Pass `excludeAddress` to allow a player to "keep" their own username
+ * (so the modal doesn't falsely block them with "already taken").
+ */
+export function usernameAvailable(username: string, excludeAddress?: string): boolean {
+  return !getAllProfiles().some(p => {
+    if (excludeAddress && p.address.toLowerCase() === excludeAddress.toLowerCase()) return false;
+    return p.username.toLowerCase() === username.trim().toLowerCase();
+  });
 }
 
 // ─── Record a match ───────────────────────────────────────────────────────────

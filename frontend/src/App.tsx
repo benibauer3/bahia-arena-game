@@ -214,17 +214,31 @@ function DesktopLayout({ children }: { children: React.ReactNode }) {
 
 // ─── Profile Gate ─────────────────────────────────────────────────────────────
 function ProfileGate({ children }: { children: React.ReactNode }) {
-  const { needsSetup } = usePlayerProfile();
-  const [showModal, setShowModal] = useState(false);
+  const { needsSetup, status } = usePlayerProfile();
 
+  // "dismissed" survives the component lifetime but resets on hard reload —
+  // that's intentional: if someone reloads, we show the prompt again for
+  // truly new wallets (existing-profile users will have needsSetup=false).
+  const [dismissed, setDismissed] = useState(false);
+
+  // Close if profile appears after modal was open (e.g. profile loaded async)
   useEffect(() => {
-    if (needsSetup) setShowModal(true);
+    if (!needsSetup) setDismissed(false); // reset dismissed so next wallet works
   }, [needsSetup]);
+
+  // Show only when:
+  //  - wagmi is fully settled (not in the middle of reconnecting)
+  //  - wallet connected with no profile found
+  //  - user hasn't clicked ✕ this session
+  const showModal =
+    (status === "connected") &&
+    needsSetup &&
+    !dismissed;
 
   return (
     <>
       {children}
-      {showModal && <UsernameModal onClose={() => setShowModal(false)} />}
+      {showModal && <UsernameModal onClose={() => setDismissed(true)} />}
     </>
   );
 }

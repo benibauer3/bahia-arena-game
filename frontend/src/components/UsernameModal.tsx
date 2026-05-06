@@ -50,7 +50,16 @@ export default function UsernameModal({ onClose }: UsernameModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center px-4">
-      <div className="w-full max-w-sm bg-arena-surface border border-arena-border rounded-2xl p-6">
+      <div className="w-full max-w-sm bg-arena-surface border border-arena-border rounded-2xl p-6 relative">
+        {/* Close — lets user skip and play without a profile */}
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 text-arena-muted hover:text-white text-lg leading-none transition-colors"
+          title="Skip for now"
+        >
+          ✕
+        </button>
+
         {/* Logo */}
         <div className="flex justify-center mb-4">
           <BahiaArenaLogo size={80} showWordmark={false} />
