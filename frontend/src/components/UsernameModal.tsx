@@ -85,7 +85,7 @@ export default function UsernameModal({ onClose }: UsernameModalProps) {
           Create Your Arena Profile
         </h2>
         <p className="text-xs text-arena-muted text-center mb-5">
-          Your wallet, username and X account formam uma única identidade.
+          Your wallet, username and X account form a single identity.
         </p>
 
         {/* ── X identity section ─────────────────────────────────────────── */}
@@ -126,7 +126,7 @@ export default function UsernameModal({ onClose }: UsernameModalProps) {
                 <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.261 5.632 5.903-5.632zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
               </svg>
             )}
-            Conectar X para usar seu @handle
+            Connect X to use your @handle
           </button>
         )}
 
@@ -135,7 +135,7 @@ export default function UsernameModal({ onClose }: UsernameModalProps) {
           {/* Username */}
           <div>
             <label className="block text-xs font-semibold text-white mb-1">
-              Username na Arena
+              Arena Username
             </label>
             <div className="relative">
               <input
@@ -157,7 +157,7 @@ export default function UsernameModal({ onClose }: UsernameModalProps) {
               <p className="mt-1 text-[10px] text-red-400">{usernameError}</p>
             )}
             {username.length > 0 && !usernameError && (
-              <p className="mt-1 text-[10px] text-arena-success">✓ Disponível</p>
+              <p className="mt-1 text-[10px] text-arena-success">✓ Available</p>
             )}
           </div>
 
@@ -170,7 +170,7 @@ export default function UsernameModal({ onClose }: UsernameModalProps) {
             disabled={!canSubmit}
             className="w-full py-3 rounded-xl bg-arena-primary text-arena-bg font-bold text-sm active:scale-95 transition-transform shadow-lg shadow-arena-primary/30 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {loading ? "Criando…" : "Entrar na Arena →"}
+            {loading ? "Creating…" : "Enter the Arena →"}
           </button>
 
           {/* Identity summary */}
@@ -186,7 +186,7 @@ export default function UsernameModal({ onClose }: UsernameModalProps) {
             <div className="flex items-center justify-between text-[10px]">
               <span className="text-arena-muted">𝕏 Twitter</span>
               <span className={xUser ? "text-[#1d9bf0] font-semibold" : "text-arena-muted"}>
-                {xUser ? `@${xUser.username}` : "não conectado"}
+                {xUser ? `@${xUser.username}` : "not connected"}
               </span>
             </div>
           </div>
