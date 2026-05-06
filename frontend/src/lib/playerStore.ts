@@ -174,6 +174,31 @@ export function usernameAvailable(username: string, excludeAddress?: string): bo
   });
 }
 
+/** Find a profile by username (any address). Used for claim/transfer flow. */
+export function getProfileByUsername(username: string): PlayerProfile | null {
+  return getAllProfiles().find(
+    p => p.username.toLowerCase() === username.trim().toLowerCase()
+  ) ?? null;
+}
+
+/**
+ * Transfer an existing profile to a new wallet address.
+ * Keeps all points, wins, streak, etc. — only the address changes.
+ * Used when the same person connects with a different wallet and wants to
+ * claim a username they created on this device previously.
+ */
+export function claimProfile(username: string, newAddress: string): PlayerProfile | null {
+  const existing = getProfileByUsername(username);
+  if (!existing) return null;
+  // Remove old entry, save under new address
+  const all = getAllProfiles().filter(
+    p => p.address.toLowerCase() !== existing.address.toLowerCase()
+  );
+  const claimed: PlayerProfile = { ...existing, address: newAddress };
+  localStorage.setItem(PK, JSON.stringify([...all, claimed]));
+  return claimed;
+}
+
 // ─── Record a match ───────────────────────────────────────────────────────────
 
 export function recordMatch(

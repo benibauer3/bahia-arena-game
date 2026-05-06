@@ -6,6 +6,7 @@ import {
   recordMatch,
   usernameAvailable,
   syncXToProfile,
+  claimProfile,
   type PlayerProfile,
   type Difficulty,
   type XIdentity,
@@ -87,6 +88,19 @@ export function usePlayerProfile() {
   );
 
   /**
+   * Transfer an existing profile (any address) to the current wallet.
+   * Used when the user's preferred username was saved under a different address
+   * on this device (e.g. after switching wallets or a timing bug during signup).
+   * All points / stats are preserved.
+   */
+  const claimExistingProfile = useCallback((username: string) => {
+    if (!address) throw new Error("No wallet connected");
+    const claimed = claimProfile(username, address);
+    if (claimed) setProfile(claimed);
+    return claimed;
+  }, [address]);
+
+  /**
    * Syncs verified X OAuth data (handle, avatar, name) into the player profile.
    * Safe to call even when X reconnects — only updates X fields, never points.
    */
@@ -104,6 +118,7 @@ export function usePlayerProfile() {
     needsSetup,
     profileSettled,
     setupProfile,
+    claimExistingProfile,
     addMatchResult,
     checkUsername,
     syncXProfile,

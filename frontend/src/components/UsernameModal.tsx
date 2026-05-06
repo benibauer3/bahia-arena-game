@@ -4,7 +4,7 @@ import BahiaArenaLogo from "@/components/BahiaArenaLogo";
 import { usePlayerProfile } from "@/hooks/usePlayerProfile";
 import { useXAuth } from "@/hooks/useXAuth";
 import { X_CLIENT_ID } from "@/lib/xAuth";
-import { getProfile } from "@/lib/playerStore";
+import { getProfile, getProfileByUsername } from "@/lib/playerStore";
 
 interface UsernameModalProps {
   onClose: () => void;
@@ -19,12 +19,19 @@ function toArenaUsername(raw: string): string {
 
 export default function UsernameModal({ onClose }: UsernameModalProps) {
   const { address } = useAccount();
-  const { setupProfile, checkUsername, syncXProfile } = usePlayerProfile();
+  const { setupProfile, checkUsername, syncXProfile, claimExistingProfile } = usePlayerProfile();
   const { isConnected: xConnected, xUser, connectX, isConnecting: xConnecting } = useXAuth();
 
   const [username, setUsername] = useState("");
   const [error,    setError]    = useState("");
   const [loading,  setLoading]  = useState(false);
+
+  // True when the typed username is taken by a DIFFERENT address on this device
+  // — user may claim it as their own (transfer to current wallet).
+  const isTakenByOther =
+    username.length >= 3 &&
+    !checkUsername(username) &&
+    !(address && getProfile(address)?.username.toLowerCase() === username.trim().toLowerCase());
 
   /**
    * Safety net: if this wallet already has a profile saved in localStorage
@@ -53,39 +60,52 @@ export default function UsernameModal({ onClose }: UsernameModalProps) {
     if (!name) return "Username is required.";
     if (!USERNAME_RE.test(name)) return "3–18 chars · letters, numbers and _ only.";
     if (!checkUsername(name)) {
-      // Edge-case guard: if the "taken" username belongs to THIS wallet, it's
-      // actually the user's own saved profile — treat it as valid so they can
-      // continue without picking a different name.
-      const existing = address ? getProfile(address) : null;
-      if (existing?.username.toLowerCase() === name.trim().toLowerCase()) return "";
-      return "Username already taken. Try another.";
+      // Own profile edge-case: username belongs to THIS wallet already
+      const mine = address ? getProfile(address) : null;
+      if (mine?.username.toLowerCase() === name.trim().toLowerCase()) return "";
+      // Taken by another address — not a hard error, handled via claim button
+      return "";
     }
     return "";
   }
 
   const usernameError = username.length > 0 ? validate(username) : "";
-  const canSubmit = username.length > 0 && !usernameError && !loading;
+  const canSubmit = username.length > 0 && !usernameError && !isTakenByOther && !loading;
 
+  /** Normal create-profile submit */
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const err = validate(username);
     if (err) { setError(err); return; }
 
-    // If this wallet already has a profile with this exact username,
-    // just close — no need to re-create.
-    const existing = address ? getProfile(address) : null;
-    if (existing?.username.toLowerCase() === username.trim().toLowerCase()) {
-      onClose();
-      return;
-    }
+    // Own profile already exists — just close
+    const mine = address ? getProfile(address) : null;
+    if (mine) { onClose(); return; }
 
     setLoading(true);
     try {
-      // Create profile — xHandle comes from OAuth if connected
       setupProfile(username.trim(), xUser?.username || undefined);
-      // Immediately sync full X identity (avatar, name, id) if available
       if (xUser) syncXProfile(xUser);
       onClose();
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /** Claim: transfer the existing profile to the current wallet */
+  async function handleClaim() {
+    setLoading(true);
+    setError("");
+    try {
+      const claimed = claimExistingProfile(username.trim());
+      if (claimed) {
+        if (xUser) syncXProfile(xUser);
+        onClose();
+      } else {
+        setError("Could not claim profile. Please try a different username.");
+      }
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
@@ -188,22 +208,44 @@ export default function UsernameModal({ onClose }: UsernameModalProps) {
             {username.length > 0 && usernameError && (
               <p className="mt-1 text-[10px] text-red-400">{usernameError}</p>
             )}
-            {username.length > 0 && !usernameError && (
+            {username.length > 0 && !usernameError && !isTakenByOther && (
               <p className="mt-1 text-[10px] text-arena-success">✓ Available</p>
             )}
           </div>
 
+          {/* ── Claim banner — shown when username exists under another wallet ── */}
+          {isTakenByOther && (
+            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 flex flex-col gap-2">
+              <p className="text-xs font-semibold text-amber-300">
+                🔑 This username is already saved on this device.
+              </p>
+              <p className="text-[10px] text-arena-muted leading-relaxed">
+                If this is your account, link it to your current wallet and keep all your points.
+              </p>
+              <button
+                type="button"
+                onClick={handleClaim}
+                disabled={loading}
+                className="w-full py-2.5 rounded-xl bg-amber-500 text-black font-bold text-sm active:scale-95 transition-transform disabled:opacity-50"
+              >
+                {loading ? "Linking…" : "Yes, this is my account → Link it"}
+              </button>
+            </div>
+          )}
+
           {/* Generic error */}
           {error && <p className="text-[11px] text-red-400 text-center">{error}</p>}
 
-          {/* Submit */}
-          <button
-            type="submit"
-            disabled={!canSubmit}
-            className="w-full py-3 rounded-xl bg-arena-primary text-arena-bg font-bold text-sm active:scale-95 transition-transform shadow-lg shadow-arena-primary/30 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {loading ? "Creating…" : "Enter the Arena →"}
-          </button>
+          {/* Submit — hidden when claim banner is shown */}
+          {!isTakenByOther && (
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              className="w-full py-3 rounded-xl bg-arena-primary text-arena-bg font-bold text-sm active:scale-95 transition-transform shadow-lg shadow-arena-primary/30 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {loading ? "Creating…" : "Enter the Arena →"}
+            </button>
+          )}
 
           {/* Identity summary */}
           <div className="rounded-xl bg-arena-bg/60 border border-arena-border p-3 space-y-1">
