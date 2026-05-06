@@ -1,10 +1,11 @@
 import { BrowserRouter, Routes, Route, useLocation, Link } from "react-router-dom";
-import { WagmiProvider }                              from "wagmi";
+import { WagmiProvider, useAccount }                  from "wagmi";
 import { QueryClient, QueryClientProvider }           from "@tanstack/react-query";
-import { useState, useEffect, Component }             from "react";
+import { useState, useEffect, useMemo, Component }    from "react";
 import type { ReactNode }                             from "react";
 import UsernameModal                                  from "@/components/UsernameModal";
 import { usePlayerProfile }                           from "@/hooks/usePlayerProfile";
+import { getProfile }                                 from "@/lib/playerStore";
 import BahiaArenaLogo                                 from "@/components/BahiaArenaLogo";
 import { wagmiConfig }                                from "@/lib/wagmiConfig";
 import { ViewModeContext, type ViewMode }              from "@/lib/viewModeContext";
@@ -214,28 +215,34 @@ function DesktopLayout({ children }: { children: React.ReactNode }) {
 
 // ─── Profile Gate ─────────────────────────────────────────────────────────────
 function ProfileGate({ children }: { children: React.ReactNode }) {
-  const { needsSetup, status, profileSettled } = usePlayerProfile();
-
-  // "dismissed" survives the component lifetime but resets on hard reload —
-  // that's intentional: if someone reloads, we show the prompt again for
-  // truly new wallets (existing-profile users will have needsSetup=false).
+  const { address, status } = useAccount();
   const [dismissed, setDismissed] = useState(false);
 
-  // Close if profile appears after modal was open (e.g. profile loaded async)
-  useEffect(() => {
-    if (!needsSetup) setDismissed(false); // reset dismissed so next wallet works
-  }, [needsSetup]);
+  // Reset dismissal whenever the connected wallet changes so a new wallet
+  // always gets a fresh prompt.
+  useEffect(() => { setDismissed(false); }, [address]);
 
-  // Show only when ALL of:
-  //  - wagmi is fully settled (status = connected, not reconnecting)
-  //  - localStorage check is done — profileSettled guards against the
-  //    single-frame window where address is set but profile hasn't loaded yet
-  //  - no profile found for this wallet
-  //  - user hasn't clicked ✕ this session
+  /**
+   * Read localStorage DIRECTLY — no React state, no timing window.
+   *
+   * The previous approach (usePlayerProfile().needsSetup) went through React
+   * state that initialises as null and is only populated after a useEffect.
+   * On the render where wagmi transitions to "connected", React state hadn't
+   * caught up yet, so needsSetup was briefly true and the modal flashed open —
+   * even for wallets that already had a saved profile.
+   *
+   * getProfile() is a synchronous localStorage read (~µs).  Re-evaluated only
+   * when `address` changes so it doesn't run on every single render.
+   */
+  const walletHasProfile = useMemo(
+    () => !!(address && getProfile(address)),
+    [address],
+  );
+
   const showModal =
     status === "connected" &&
-    profileSettled &&
-    needsSetup &&
+    !!address &&
+    !walletHasProfile &&
     !dismissed;
 
   return (

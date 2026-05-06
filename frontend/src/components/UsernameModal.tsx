@@ -4,6 +4,7 @@ import BahiaArenaLogo from "@/components/BahiaArenaLogo";
 import { usePlayerProfile } from "@/hooks/usePlayerProfile";
 import { useXAuth } from "@/hooks/useXAuth";
 import { X_CLIENT_ID } from "@/lib/xAuth";
+import { getProfile } from "@/lib/playerStore";
 
 interface UsernameModalProps {
   onClose: () => void;
@@ -25,6 +26,18 @@ export default function UsernameModal({ onClose }: UsernameModalProps) {
   const [error,    setError]    = useState("");
   const [loading,  setLoading]  = useState(false);
 
+  /**
+   * Safety net: if this wallet already has a profile saved in localStorage
+   * (e.g. the modal was shown due to a timing edge case), close immediately.
+   * This runs synchronously on mount and again if the address changes.
+   */
+  useEffect(() => {
+    if (address && getProfile(address)) {
+      onClose();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [address]);
+
   // If X is already connected, pre-fill the username field automatically
   useEffect(() => {
     if (xConnected && xUser && !username) {
@@ -39,7 +52,14 @@ export default function UsernameModal({ onClose }: UsernameModalProps) {
   function validate(name: string): string {
     if (!name) return "Username is required.";
     if (!USERNAME_RE.test(name)) return "3–18 chars · letters, numbers and _ only.";
-    if (!checkUsername(name)) return "Username already taken. Try another.";
+    if (!checkUsername(name)) {
+      // Edge-case guard: if the "taken" username belongs to THIS wallet, it's
+      // actually the user's own saved profile — treat it as valid so they can
+      // continue without picking a different name.
+      const existing = address ? getProfile(address) : null;
+      if (existing?.username.toLowerCase() === name.trim().toLowerCase()) return "";
+      return "Username already taken. Try another.";
+    }
     return "";
   }
 
@@ -50,6 +70,15 @@ export default function UsernameModal({ onClose }: UsernameModalProps) {
     e.preventDefault();
     const err = validate(username);
     if (err) { setError(err); return; }
+
+    // If this wallet already has a profile with this exact username,
+    // just close — no need to re-create.
+    const existing = address ? getProfile(address) : null;
+    if (existing?.username.toLowerCase() === username.trim().toLowerCase()) {
+      onClose();
+      return;
+    }
+
     setLoading(true);
     try {
       // Create profile — xHandle comes from OAuth if connected
