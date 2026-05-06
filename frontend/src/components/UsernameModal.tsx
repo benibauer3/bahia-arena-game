@@ -3,6 +3,7 @@ import { useAccount } from "wagmi";
 import BahiaArenaLogo from "@/components/BahiaArenaLogo";
 import { usePlayerProfile } from "@/hooks/usePlayerProfile";
 import { useXAuth } from "@/hooks/useXAuth";
+import { X_CLIENT_ID } from "@/lib/xAuth";
 
 interface UsernameModalProps {
   onClose: () => void;
@@ -88,46 +89,48 @@ export default function UsernameModal({ onClose }: UsernameModalProps) {
           Your wallet, username and X account form a single identity.
         </p>
 
-        {/* ── X identity section ─────────────────────────────────────────── */}
-        {xConnected && xUser ? (
-          /* X already connected — show verified badge */
-          <div className="flex items-center gap-3 p-3 rounded-xl bg-arena-bg border border-[#1d9bf0]/30 mb-4">
-            {xUser.profile_image_url ? (
-              <img
-                src={xUser.profile_image_url.replace("_normal", "_bigger")}
-                alt={xUser.name}
-                className="w-10 h-10 rounded-full border-2 border-[#1d9bf0]/40 shrink-0 object-cover"
-              />
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-[#1d9bf0]/20 flex items-center justify-center shrink-0">
-                <svg viewBox="0 0 24 24" className="w-5 h-5 fill-[#1d9bf0]">
+        {/* ── X identity section — only shown when X OAuth is configured ── */}
+        {X_CLIENT_ID && (
+          xConnected && xUser ? (
+            /* X already connected — show verified badge */
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-arena-bg border border-[#1d9bf0]/30 mb-4">
+              {xUser.profile_image_url ? (
+                <img
+                  src={xUser.profile_image_url.replace("_normal", "_bigger")}
+                  alt={xUser.name}
+                  className="w-10 h-10 rounded-full border-2 border-[#1d9bf0]/40 shrink-0 object-cover"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-[#1d9bf0]/20 flex items-center justify-center shrink-0">
+                  <svg viewBox="0 0 24 24" className="w-5 h-5 fill-[#1d9bf0]">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.261 5.632 5.903-5.632zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                  </svg>
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-white truncate">{xUser.name}</p>
+                <p className="text-xs text-[#1d9bf0]">@{xUser.username}</p>
+              </div>
+              <span className="text-green-400 font-bold text-sm shrink-0">✓</span>
+            </div>
+          ) : (
+            /* X not connected — offer OAuth button */
+            <button
+              type="button"
+              onClick={connectX}
+              disabled={xConnecting}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-black border border-white/10 text-white text-sm font-semibold mb-4 active:scale-95 transition-transform hover:bg-white/5 disabled:opacity-60"
+            >
+              {xConnecting ? (
+                <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+              ) : (
+                <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white shrink-0">
                   <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.261 5.632 5.903-5.632zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
                 </svg>
-              </div>
-            )}
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-white truncate">{xUser.name}</p>
-              <p className="text-xs text-[#1d9bf0]">@{xUser.username}</p>
-            </div>
-            <span className="text-green-400 font-bold text-sm shrink-0">✓</span>
-          </div>
-        ) : (
-          /* X not connected — offer OAuth button */
-          <button
-            type="button"
-            onClick={connectX}
-            disabled={xConnecting}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-black border border-white/10 text-white text-sm font-semibold mb-4 active:scale-95 transition-transform hover:bg-white/5 disabled:opacity-60"
-          >
-            {xConnecting ? (
-              <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-            ) : (
-              <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white shrink-0">
-                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.261 5.632 5.903-5.632zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-              </svg>
-            )}
-            Connect X to use your @handle
-          </button>
+              )}
+              Connect X to use your @handle
+            </button>
+          )
         )}
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -183,12 +186,14 @@ export default function UsernameModal({ onClose }: UsernameModalProps) {
               <span className="text-arena-muted">👤 Username</span>
               <span className="text-arena-primary font-semibold">{username || "—"}</span>
             </div>
-            <div className="flex items-center justify-between text-[10px]">
-              <span className="text-arena-muted">𝕏 Twitter</span>
-              <span className={xUser ? "text-[#1d9bf0] font-semibold" : "text-arena-muted"}>
-                {xUser ? `@${xUser.username}` : "not connected"}
-              </span>
-            </div>
+            {X_CLIENT_ID && (
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="text-arena-muted">𝕏 Twitter</span>
+                <span className={xUser ? "text-[#1d9bf0] font-semibold" : "text-arena-muted"}>
+                  {xUser ? `@${xUser.username}` : "not connected"}
+                </span>
+              </div>
+            )}
           </div>
         </form>
       </div>

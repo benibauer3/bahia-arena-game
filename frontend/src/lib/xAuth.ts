@@ -13,11 +13,22 @@
 
 export const X_CLIENT_ID  = import.meta.env.VITE_X_CLIENT_ID ?? "";
 
-/** Must match EXACTLY what you registered in the X developer portal */
+/**
+ * Redirect URI sent to X during OAuth.
+ *
+ * Priority:
+ *  1. VITE_X_REDIRECT_URI env var  — set this on Vercel to your production
+ *     domain so the URI is stable across preview deployments, e.g.:
+ *     https://bahiaarena.xyz/profile
+ *  2. Falls back to window.location.origin + /profile (fine for local dev)
+ *
+ * Must match EXACTLY what is registered in the X developer portal.
+ */
 export const X_REDIRECT_URI =
-  typeof window !== "undefined"
+  import.meta.env.VITE_X_REDIRECT_URI ??
+  (typeof window !== "undefined"
     ? `${window.location.origin}/profile`
-    : "http://localhost:5173/profile";
+    : "http://localhost:5173/profile");
 
 export const X_SCOPES = ["tweet.read", "users.read", "tweet.write", "offline.access"];
 

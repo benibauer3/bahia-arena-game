@@ -24,6 +24,16 @@ import {
   type XUser,
 } from "@/lib/xAuth";
 
+/**
+ * Module-level singleton flag.
+ *
+ * The UsernameModal and the Profile page both mount useXAuth simultaneously.
+ * If both try to exchange the OAuth code the second call fails (codes are
+ * single-use) and wipes the token saved by the first.  The flag ensures only
+ * one component instance ever processes a given callback URL.
+ */
+let _callbackHandled = false;
+
 export function useXAuth() {
   const [token,        setTokenState]   = useState<XToken | null>(() => xStore.getToken());
   const [xUser,        setXUserState]   = useState<XUser  | null>(() => xStore.getUser());
@@ -67,6 +77,10 @@ export function useXAuth() {
 
     if (!code || !stateParam) return;
 
+    // Guard: only one component instance ever exchanges a given code
+    if (_callbackHandled) return;
+    _callbackHandled = true;
+
     // CSRF check
     const savedState = xStore.getState();
     if (stateParam !== savedState) {
@@ -81,7 +95,7 @@ export function useXAuth() {
       return;
     }
 
-    // Clean URL and stored PKCE data
+    // Clean URL and stored PKCE data immediately so no other instance retries
     window.history.replaceState({}, "", window.location.pathname);
     xStore.delState();
     xStore.delVerifier();
@@ -99,6 +113,7 @@ export function useXAuth() {
         setError(e.message);
         xStore.delToken();
         setTokenState(null);
+        _callbackHandled = false; // allow retry on explicit reconnect
       })
       .finally(() => setIsConnecting(false));
   // Run once on mount — do not add deps
