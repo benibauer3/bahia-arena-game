@@ -14,25 +14,49 @@ import {
 export function usePlayerProfile() {
   const { address, isConnected, status } = useAccount();
 
-  // Load profile synchronously from localStorage when address is available.
-  // Using a lazy initializer means no flicker — profile is ready on first render
-  // IF the address was already in localStorage (reconnect case).
-  const [profile, setProfile] = useState<PlayerProfile | null>(null);
+  /**
+   * Load profile synchronously on the very first render using a lazy initializer.
+   *
+   * Why this matters:
+   *  - wagmi persists wallet connections across page reloads.
+   *  - On mount, `address` is already available from wagmi's zustand store.
+   *  - `useState(() => ...)` runs synchronously before the first paint.
+   *  - Result: returning users have `hasProfile = true` on frame 1, so the
+   *    "create profile" modal is NEVER shown to them — not even for one frame.
+   *
+   * Without this (plain `useState(null)`), the profile was always null on the
+   * first render, needsSetup was briefly true, and the modal flashed open.
+   * Users who typed their username quickly got "already taken" because the
+   * profile existed in localStorage but hadn't been loaded into state yet.
+   */
+  const [profile, setProfile] = useState<PlayerProfile | null>(
+    () => address ? (getProfile(address) ?? null) : null,
+  );
+
+  /**
+   * profileSettled: true once we have definitively checked localStorage for
+   * the current address.  Starts true if the lazy initializer found an address
+   * (reconnect case). Becomes true after the first effect run for new connections
+   * where address wasn't available on mount (first-ever wallet connect).
+   */
+  const [profileSettled, setProfileSettled] = useState<boolean>(() => !!address);
 
   const refresh = useCallback(() => {
     setProfile(address ? (getProfile(address) ?? null) : null);
+    setProfileSettled(true);
   }, [address]);
 
-  // Re-read from storage whenever address changes (login / disconnect)
+  // Re-read from storage whenever address changes (login / wallet switch / disconnect)
   useEffect(() => { refresh(); }, [refresh]);
 
   // ── Derived state ────────────────────────────────────────────────────────────
-  // Only mark as "needsSetup" when wagmi has fully resolved its reconnection.
-  // During 'connecting' or 'reconnecting' we don't yet know if a profile exists —
-  // avoid flashing the modal for users who already have a profile.
+  // Only mark as "needsSetup" when:
+  //  1. wagmi has fully resolved its reconnection (status = connected)
+  //  2. We have confirmed the profile check is done (profileSettled)
+  //  3. No profile was found for the current address
   const isSettled    = status === "connected" || status === "disconnected";
   const hasProfile   = !!profile;
-  const needsSetup   = isSettled && isConnected && !!address && !hasProfile;
+  const needsSetup   = isSettled && profileSettled && isConnected && !!address && !hasProfile;
 
   // ── Actions ──────────────────────────────────────────────────────────────────
 
@@ -78,6 +102,7 @@ export function usePlayerProfile() {
     isConnected,
     status,
     needsSetup,
+    profileSettled,
     setupProfile,
     addMatchResult,
     checkUsername,

@@ -214,7 +214,7 @@ function DesktopLayout({ children }: { children: React.ReactNode }) {
 
 // ─── Profile Gate ─────────────────────────────────────────────────────────────
 function ProfileGate({ children }: { children: React.ReactNode }) {
-  const { needsSetup, status } = usePlayerProfile();
+  const { needsSetup, status, profileSettled } = usePlayerProfile();
 
   // "dismissed" survives the component lifetime but resets on hard reload —
   // that's intentional: if someone reloads, we show the prompt again for
@@ -226,12 +226,15 @@ function ProfileGate({ children }: { children: React.ReactNode }) {
     if (!needsSetup) setDismissed(false); // reset dismissed so next wallet works
   }, [needsSetup]);
 
-  // Show only when:
-  //  - wagmi is fully settled (not in the middle of reconnecting)
-  //  - wallet connected with no profile found
+  // Show only when ALL of:
+  //  - wagmi is fully settled (status = connected, not reconnecting)
+  //  - localStorage check is done — profileSettled guards against the
+  //    single-frame window where address is set but profile hasn't loaded yet
+  //  - no profile found for this wallet
   //  - user hasn't clicked ✕ this session
   const showModal =
-    (status === "connected") &&
+    status === "connected" &&
+    profileSettled &&
     needsSetup &&
     !dismissed;
 
