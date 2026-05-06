@@ -2,11 +2,13 @@ import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useAccount, useReadContract, useWriteContract } from "wagmi";
 import { usePlayerProfile } from "@/hooks/usePlayerProfile";
+import { useXAuth } from "@/hooks/useXAuth";
 import { getPlayerMatches } from "@/lib/playerStore";
 import type { MatchRecord } from "@/lib/playerStore";
 import { ACTIVE_CONTRACTS, ARENA_ABI } from "@/lib/contracts";
 import { ChampionArt } from "@/components/ChampionArt";
 import { CHAMPIONS, ChampionClass } from "@/lib/champions";
+import { X_CLIENT_ID } from "@/lib/xAuth";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function truncate(addr: string) {
@@ -40,28 +42,19 @@ export default function Profile() {
   const { address, isConnected } = useAccount();
   const { profile, hasProfile, setupProfile, refresh } = usePlayerProfile();
 
-  // ── X handle state (localStorage) ─────────────────────────────────────────
-  const xKey = address ? `bahia-xhandle-${address.toLowerCase()}` : null;
-  const [xHandle, setXHandle] = useState<string>(() => {
-    if (!xKey) return "";
-    return localStorage.getItem(xKey) ?? "";
-  });
-  const [xInput, setXInput] = useState("");
-  const [xEditing, setXEditing] = useState(false);
+  // ── X OAuth ────────────────────────────────────────────────────────────────
+  const {
+    isConnected:  xConnected,
+    isConnecting: xConnecting,
+    isTweeting,
+    xUser,
+    connectX,
+    disconnectX,
+    shareTweet,
+    error:        xError,
+  } = useXAuth();
 
-  useEffect(() => {
-    if (!xKey) return;
-    const stored = localStorage.getItem(xKey) ?? "";
-    setXHandle(stored);
-  }, [xKey]);
-
-  const saveXHandle = () => {
-    if (!xKey) return;
-    const clean = xInput.replace(/^@/, "").trim();
-    localStorage.setItem(xKey, clean);
-    setXHandle(clean);
-    setXEditing(false);
-  };
+  const [tweetSent, setTweetSent] = useState(false);
 
   // ── Username inline edit ───────────────────────────────────────────────────
   const [usernameEditing, setUsernameEditing] = useState(false);
@@ -69,11 +62,10 @@ export default function Profile() {
 
   const saveUsername = useCallback(() => {
     if (!usernameInput.trim()) { setUsernameEditing(false); return; }
-    // Re-use setupProfile (creates or overwrites)
-    setupProfile(usernameInput.trim(), xHandle || undefined);
+    setupProfile(usernameInput.trim(), xUser?.username || undefined);
     refresh();
     setUsernameEditing(false);
-  }, [usernameInput, xHandle, setupProfile, refresh]);
+  }, [usernameInput, xUser, setupProfile, refresh]);
 
   // ── Copy address ───────────────────────────────────────────────────────────
   const [copied, setCopied] = useState(false);
@@ -185,9 +177,14 @@ export default function Profile() {
   const champClass = (profile as any)?.champion ?? champIndex;
   const champDef = CHAMPIONS[champClass as number] ?? CHAMPIONS[0];
 
-  // ── Twitter share ──────────────────────────────────────────────────────────
-  const shareText = `⚔️ Just won a battle as ${champDef.name} on @BahiaArena! 🏆 Check it out: https://bahiaarena.xyz #CeloArena #Web3Gaming`;
-  const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
+  // ── Share text ─────────────────────────────────────────────────────────────
+  const rankStr  = rankPts !== undefined ? ` (${String(rankPts as bigint)} pts)` : "";
+  const shareText = `⚔️ Jogando como ${champDef.name} na @BahiaArena!${rankStr} 🏆 Venha desafiar: https://bahiaarena.xyz #CeloArena #Web3Gaming`;
+
+  const handleShareTweet = async () => {
+    const ok = await shareTweet(shareText);
+    if (ok) { setTweetSent(true); setTimeout(() => setTweetSent(false), 3000); }
+  };
 
   // ── Not connected ──────────────────────────────────────────────────────────
   if (!isConnected) {
@@ -284,57 +281,119 @@ export default function Profile() {
         </div>
       </section>
 
-      {/* ── 4. X (Twitter) Connection Card ─────────────────────────────────── */}
+      {/* ── 4. X (Twitter) OAuth Card ────────────────────────────────────── */}
       <section className="rounded-2xl bg-arena-surface border border-arena-border p-4 mb-4">
-        <p className="text-xs font-semibold mb-3">🐦 Connect X Profile</p>
-        {xHandle ? (
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-semibold text-green-400">@{xHandle}</p>
+
+        {/* Header */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            {/* X logo */}
+            <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white" aria-hidden>
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.261 5.632 5.903-5.632zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+            </svg>
+            <p className="text-xs font-semibold">X Profile</p>
+          </div>
+          {xConnected && (
             <button
-              onClick={() => { setXInput(xHandle); setXEditing(true); }}
-              className="text-xs text-arena-muted hover:text-white"
+              onClick={disconnectX}
+              className="text-[10px] text-arena-muted hover:text-arena-danger transition-colors"
             >
-              Change
+              Disconnect
             </button>
-          </div>
-        ) : xEditing ? (
-          <div className="flex items-center gap-2 mb-3">
-            <input
-              autoFocus
-              value={xInput}
-              onChange={e => setXInput(e.target.value)}
-              placeholder="@yourhandle"
-              className="flex-1 px-2 py-1.5 text-sm rounded-lg bg-arena-bg border border-arena-border text-white focus:outline-none focus:border-arena-primary"
-            />
-            <button onClick={saveXHandle} className="text-xs px-2 py-1.5 rounded-lg bg-arena-primary text-arena-bg font-semibold">Save</button>
-            <button onClick={() => setXEditing(false)} className="text-xs text-arena-muted">✕</button>
-          </div>
-        ) : (
-          <button
-            onClick={() => { setXInput(""); setXEditing(true); }}
-            className="text-xs px-3 py-1.5 rounded-lg bg-arena-bg border border-arena-border text-arena-muted hover:text-white mb-3 w-full text-left"
-          >
-            + Add X handle
-          </button>
-        )}
-
-        <p className="text-[10px] text-arena-muted mb-2">Share your victories automatically</p>
-
-        {/* Tweet preview */}
-        <div className="rounded-xl bg-arena-bg border border-arena-border p-3 mb-3">
-          <p className="text-[10px] text-arena-muted leading-relaxed">
-            ⚔️ Just won a battle as <span className="text-arena-primary">{champDef.name}</span> on @BahiaArena! 🏆 Check it out: bahiaarena.xyz <span className="text-arena-primary">#CeloArena #Web3Gaming</span>
-          </p>
+          )}
         </div>
 
-        <a
-          href={twitterUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-[#1d9bf0]/15 border border-[#1d9bf0]/30 text-[#1d9bf0] text-xs font-semibold active:scale-95 transition-transform"
-        >
-          Post to X
-        </a>
+        {/* ── Not configured ─────────────────────────────────────────────── */}
+        {!X_CLIENT_ID ? (
+          <div className="rounded-xl bg-arena-bg border border-arena-border p-3 text-center">
+            <p className="text-xs text-arena-muted">
+              Set <code className="text-arena-primary">VITE_X_CLIENT_ID</code> in .env to enable X login
+            </p>
+          </div>
+        ) : xConnecting ? (
+          /* ── Connecting spinner ────────────────────────────────────────── */
+          <div className="flex flex-col items-center gap-3 py-4">
+            <span className="w-8 h-8 rounded-full border-2 border-[#1d9bf0] border-t-transparent animate-spin" />
+            <p className="text-xs text-arena-muted">Connecting to X…</p>
+          </div>
+
+        ) : xConnected && xUser ? (
+          /* ── Connected ─────────────────────────────────────────────────── */
+          <div>
+            {/* User card */}
+            <div className="flex items-center gap-3 mb-4 p-3 rounded-xl bg-arena-bg border border-arena-border">
+              {xUser.profile_image_url ? (
+                <img
+                  src={xUser.profile_image_url.replace("_normal", "_bigger")}
+                  alt={xUser.name}
+                  className="w-12 h-12 rounded-full object-cover border-2 border-[#1d9bf0]/40"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-[#1d9bf0]/20 flex items-center justify-center text-xl">
+                  🐦
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-white truncate">{xUser.name}</p>
+                <p className="text-xs text-[#1d9bf0]">@{xUser.username}</p>
+                {xUser.public_metrics && (
+                  <p className="text-[10px] text-arena-muted mt-0.5">
+                    {xUser.public_metrics.followers_count.toLocaleString()} seguidores
+                  </p>
+                )}
+              </div>
+              <span className="text-green-400 text-lg shrink-0">✓</span>
+            </div>
+
+            {/* Tweet preview */}
+            <div className="rounded-xl bg-arena-bg border border-arena-border p-3 mb-3">
+              <p className="text-[10px] text-arena-muted uppercase tracking-wider mb-1">Preview</p>
+              <p className="text-xs text-white/80 leading-relaxed">{shareText}</p>
+            </div>
+
+            {/* Share button */}
+            <button
+              onClick={handleShareTweet}
+              disabled={isTweeting || tweetSent}
+              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-[#1d9bf0]/15 border border-[#1d9bf0]/40 text-[#1d9bf0] text-xs font-semibold active:scale-95 transition-all disabled:opacity-60"
+            >
+              {tweetSent ? (
+                <>✓ Postado!</>
+              ) : isTweeting ? (
+                <><span className="w-3.5 h-3.5 rounded-full border-2 border-[#1d9bf0] border-t-transparent animate-spin" /> Postando…</>
+              ) : (
+                <>
+                  <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-[#1d9bf0]">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.261 5.632 5.903-5.632zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                  </svg>
+                  Postar no X
+                </>
+              )}
+            </button>
+          </div>
+
+        ) : (
+          /* ── Not connected ─────────────────────────────────────────────── */
+          <div>
+            <p className="text-xs text-arena-muted mb-4">
+              Conecte sua conta X para compartilhar vitórias automaticamente e aparecer no ranking.
+            </p>
+            <button
+              onClick={connectX}
+              className="flex items-center justify-center gap-2.5 w-full py-3 rounded-xl bg-black border border-white/10 text-white text-sm font-semibold active:scale-95 transition-transform hover:bg-white/5"
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white">
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.261 5.632 5.903-5.632zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+              </svg>
+              Entrar com X
+            </button>
+          </div>
+        )}
+
+        {/* Error */}
+        {xError && (
+          <p className="mt-3 text-xs text-arena-danger text-center">{xError}</p>
+        )}
       </section>
 
       {/* ── 5. On-Chain Stats Card ──────────────────────────────────────────── */}
