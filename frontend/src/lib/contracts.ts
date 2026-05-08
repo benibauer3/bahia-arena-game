@@ -9,10 +9,10 @@ export const CONTRACTS = {
   },
   celo: {
     BahiaChampion: "0x0000000000000000000000000000000000000000" as `0x${string}`,
-    ArenaManager:  "0x0000000000000000000000000000000000000000" as `0x${string}`,
+    ArenaManager:  "0x3e625cdF5E7A0d7Fb7eA4424323936d27C19ea58" as `0x${string}`, // deployed 2026-05-08
     usdt:          "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e" as `0x${string}`, // USDT mainnet (6 dec)
-    aavePool:      "0x3E59A31363E2aD014A3A97703feB7fF8bD3b5b0c" as `0x${string}`, // Aave V3 Pool on Celo
-    aUsdt:         "0x4d4b4A13B5A57a2bAF3A89d00B78f6c58c2E2B35" as `0x${string}`, // aUSDT on Celo Aave V3
+    aavePool:      "0x3E59A31363E2ad014dcbc521c4a0d5757d9f3402" as `0x${string}`, // Aave V3 Pool on Celo
+    aUsdt:         "0xdee98402a302e4d707fb9bf2bac66faeec31e8df" as `0x${string}`, // aUSDT on Celo Aave V3
   },
 } as const;
 
