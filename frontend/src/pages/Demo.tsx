@@ -17,12 +17,22 @@ import FloatingCombatText, { FloatItem } from "@/components/FloatingCombatText";
 import { useBattleCards, Difficulty }   from "@/hooks/useBattleCards";
 import { CHAMPION_CARDS, BASE_HP, BASE_SHIELD, type TurnLog } from "@/lib/championCards";
 import BahiaArenaLogo                   from "@/components/BahiaArenaLogo";
+import BattleAbilityFX                  from "@/components/BattleAbilityFX";
 import { usePlayerProfile }             from "@/hooks/usePlayerProfile";
 import { DIFF_PTS, STREAK_BONUS }       from "@/lib/playerStore";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type FlashType = "hit" | "heal" | "shield" | "ultimate" | null;
+
+// Per-champion FX color (matches BattleAbilityFX theme)
+const CHAMP_FX_COLOR: Record<ChampionClass, string> = {
+  [ChampionClass.CURUPIRA]: "#22c55e",
+  [ChampionClass.IARA]:     "#22d3ee",
+  [ChampionClass.BOITATA]:  "#f97316",
+  [ChampionClass.ANHANGA]:  "#7c3aed",
+  [ChampionClass.TUPA]:     "#fbbf24",
+};
 
 function flashClass(f: FlashType): string {
   if (!f) return "";
@@ -343,7 +353,19 @@ function BattleScreen({
   const [flashB,         setFlashB]         = useState<FlashType>(null);
   const [flashKeyA,      setFlashKeyA]      = useState(0);
   const [flashKeyB,      setFlashKeyB]      = useState(0);
+  const [abilityFX,      setAbilityFX]      = useState({ attackA: false, attackB: false, selfA: false, selfB: false, ultA: false, ultB: false, key: 0 });
   const [screenFlash,    setScreenFlash]    = useState(false);
+  // ── SF3/SF6/DBFZ extra states ────────────────────────────────────────────
+  const [afterimageA,    setAfterimageA]    = useState(false);
+  const [afterimageB,    setAfterimageB]    = useState(false);
+  const [showCounterHit, setShowCounterHit] = useState(false);
+  const [counterHitKey,  setCounterHitKey]  = useState(0);
+  const [counterHitText, setCounterHitText] = useState("COUNTER HIT!");
+  const [counterHitSide, setCounterHitSide] = useState<"A"|"B">("B");
+  const [showParry,      setShowParry]      = useState(false);
+  const [parryKey,       setParryKey]       = useState(0);
+  const [lungeA,         setLungeA]         = useState(0);   // px offset toward B
+  const [lungeB,         setLungeB]         = useState(0);   // px offset toward A
   const [screenFlashKey, setScreenFlashKey] = useState(0);
   const lastTurnRef = useRef(-1);
   const { addMatchResult, profile: playerProfile, isConnected } = usePlayerProfile();
@@ -358,35 +380,43 @@ function BattleScreen({
   const [moveTextKey,     setMoveTextKey]     = useState(0);
   const [showResultCTAs,  setShowResultCTAs]  = useState(false);
 
+  const champFxColor    = CHAMP_FX_COLOR[myClass];
+  const opponentFxColor = CHAMP_FX_COLOR[opponentClass];
+
   useEffect(() => {
     if (!lastResult) return;
     const turn = lastResult.newState.turn;
     if (turn === lastTurnRef.current) return;
     lastTurnRef.current = turn;
 
+    const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    // ── Parse log: FX flags + impact data ────────────────────────────────
+    let atA = false, atB = false, sA = false, sB = false, uA = false, uB = false;
     const nFA: FloatItem[] = [], nFB: FloatItem[] = [];
     let hitA = false, hitB = false;
     let fA: FlashType = null, fB: FlashType = null;
     let doFlash = false;
-    const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
     for (const e of lastResult.newState.log) {
-      if (e.type === "damage" && typeof e.damage === "number") {
-        if (e.side === "A") { hitA = true; fA = "hit"; nFA.push({ id: uid(), label: `-${e.damage}`, type: "damage" }); }
-        if (e.side === "B") { hitB = true; fB = "hit"; nFB.push({ id: uid(), label: `-${e.damage}`, type: "damage" }); }
-      }
-      if (e.type === "shield" && typeof e.shield === "number") {
-        if (e.side === "A") { if (!fA || fA === "hit") fA = "shield"; nFA.push({ id: uid(), label: `+${e.shield}🛡️`, type: "shield" }); }
-        if (e.side === "B") { if (!fB || fB === "hit") fB = "shield"; nFB.push({ id: uid(), label: `+${e.shield}🛡️`, type: "shield" }); }
-      }
-      if (e.type === "heal" && typeof e.heal === "number") {
-        if (e.side === "A") { if (!fA) fA = "heal"; nFA.push({ id: uid(), label: `+${e.heal}💚`, type: "heal" }); }
-        if (e.side === "B") { if (!fB) fB = "heal"; nFB.push({ id: uid(), label: `+${e.heal}💚`, type: "heal" }); }
+      if (e.type === "damage") {
+        if (e.side === "A") atA = true;
+        if (e.side === "B") atB = true;
+        if (e.side === "A" && typeof e.damage === "number") { hitA = true; fA = "hit"; nFA.push({ id: uid(), label: `-${e.damage}`, type: "damage" }); }
+        if (e.side === "B" && typeof e.damage === "number") { hitB = true; fB = "hit"; nFB.push({ id: uid(), label: `-${e.damage}`, type: "damage" }); }
       }
       if (e.type === "ultimate") {
+        if (e.side === "A") { atA = true; uA = true; fA = "ultimate"; nFA.push({ id: uid(), label: "✨ ULTIMATE!", type: "ultimate" }); }
+        if (e.side === "B") { atB = true; uB = true; fB = "ultimate"; nFB.push({ id: uid(), label: "✨ ULTIMATE!", type: "ultimate" }); }
         doFlash = true;
-        if (e.side === "A") { fA = "ultimate"; nFA.push({ id: uid(), label: "✨ ULTIMATE!", type: "ultimate" }); }
-        if (e.side === "B") { fB = "ultimate"; nFB.push({ id: uid(), label: "✨ ULTIMATE!", type: "ultimate" }); }
+      }
+      if (e.type === "shield" && typeof e.shield === "number") {
+        if (e.side === "A") { sA = true; if (!fA || fA === "hit") fA = "shield"; nFA.push({ id: uid(), label: `+${e.shield}🛡️`, type: "shield" }); }
+        if (e.side === "B") { sB = true; if (!fB || fB === "hit") fB = "shield"; nFB.push({ id: uid(), label: `+${e.shield}🛡️`, type: "shield" }); }
+      }
+      if (e.type === "heal" && typeof e.heal === "number") {
+        if (e.side === "A") { sA = true; if (!fA) fA = "heal"; nFA.push({ id: uid(), label: `+${e.heal}💚`, type: "heal" }); }
+        if (e.side === "B") { sB = true; if (!fB) fB = "heal"; nFB.push({ id: uid(), label: `+${e.heal}💚`, type: "heal" }); }
       }
       if (e.type === "status") {
         if (e.text.includes("A is")) nFA.push({ id: uid(), label: "💫", type: "status" });
@@ -394,14 +424,66 @@ function BattleScreen({
       }
     }
 
+    // ── Launch projectile / aura immediately (t = 0) ─────────────────────
+    setAbilityFX({ attackA: atA, attackB: atB, selfA: sA, selfB: sB, ultA: uA, ultB: uB, key: turn });
+
+    // ── DBFZ afterimage trail ─────────────────────────────────────────────
+    if (atA) { setAfterimageA(true); setTimeout(() => setAfterimageA(false), 290); }
+    if (atB) { setAfterimageB(true); setTimeout(() => setAfterimageB(false), 290); }
+
+    // ── SF3 Parry detection: shield gained while opponent attacks ─────────
+    const parryA = sA && atB;
+    const parryB = sB && atA;
+    if (parryA || parryB) {
+      setShowParry(true);
+      setParryKey(k => k + 1);
+      setTimeout(() => setShowParry(false), 750);
+    }
+
+    // ── Track max damage per side for counter hit ─────────────────────────
+    let maxDmgToA = 0, maxDmgToB = 0;
+    for (const e of lastResult.newState.log) {
+      if (e.type === "damage" && typeof e.damage === "number") {
+        if (e.side === "A") maxDmgToA = Math.max(maxDmgToA, e.damage);
+        if (e.side === "B") maxDmgToB = Math.max(maxDmgToB, e.damage);
+      }
+    }
+
+    // ── Delay impact effects until projectile/beam lands ─────────────────
+    const IMPACT_DELAY = (atA || atB) ? (uA || uB ? 420 : 350) : 0;
+
+    // ── Champion lunge toward opponent (makes it look like they're striking) ─
+    if (atA) { setLungeA(52); setTimeout(() => setLungeA(0), IMPACT_DELAY + 30); }
+    else setLungeA(0);
+    if (atB) { setLungeB(52); setTimeout(() => setLungeB(0), IMPACT_DELAY + 30); }
+    else setLungeB(0);
+    const capturedFA = fA, capturedFB = fB;
+    setTimeout(() => {
     if (nFA.length) setFloatA(p => [...p, ...nFA]);
     if (nFB.length) setFloatB(p => [...p, ...nFB]);
 
     if (hitA) { setAnimKeyA(k=>k+1); requestAnimationFrame(() => { setShakeA(true); setTimeout(() => setShakeA(false), 500); }); }
     if (hitB) { setAnimKeyB(k=>k+1); requestAnimationFrame(() => { setShakeB(true); setTimeout(() => setShakeB(false), 500); }); }
-    if (fA) { setFlashA(fA); setFlashKeyA(k=>k+1); setTimeout(() => setFlashA(null), fA === "ultimate" ? 700 : 450); }
-    if (fB) { setFlashB(fB); setFlashKeyB(k=>k+1); setTimeout(() => setFlashB(null), fB === "ultimate" ? 700 : 450); }
+    if (capturedFA) { setFlashA(capturedFA); setFlashKeyA(k=>k+1); setTimeout(() => setFlashA(null), capturedFA === "ultimate" ? 700 : 450); }
+    if (capturedFB) { setFlashB(capturedFB); setFlashKeyB(k=>k+1); setTimeout(() => setFlashB(null), capturedFB === "ultimate" ? 700 : 450); }
     if (doFlash) { setScreenFlash(true); setScreenFlashKey(k=>k+1); setTimeout(() => setScreenFlash(false), 600); }
+
+    // ── SF6 Counter Hit / Punish Counter text ──────────────────────────────
+    {
+      // Show only for non-ultimate heavy damage
+      let info: { text: string; side: "A"|"B" } | null = null;
+      if (!uA && maxDmgToB >= 40)      info = { text: "PUNISH COUNTER!", side: "B" };
+      else if (!uA && maxDmgToB >= 25) info = { text: "COUNTER HIT!",    side: "B" };
+      else if (!uB && maxDmgToA >= 40) info = { text: "PUNISH COUNTER!", side: "A" };
+      else if (!uB && maxDmgToA >= 25) info = { text: "COUNTER HIT!",    side: "A" };
+      if (info) {
+        setCounterHitText(info.text);
+        setCounterHitSide(info.side);
+        setShowCounterHit(true);
+        setCounterHitKey(k => k + 1);
+        setTimeout(() => setShowCounterHit(false), 950);
+      }
+    }
 
     // ── Centre cinematic text ──────────────────────────────────────────────────
     {
@@ -410,14 +492,20 @@ function BattleScreen({
         if (e.type === "damage" && typeof e.damage === "number" && e.damage > maxDmg) maxDmg = e.damage;
         if (e.type === "ultimate") hasUlt = true;
       }
-      const center = hasUlt ? "✨ ULTIMATE!" : maxDmg >= 30 ? "💥 CRITICAL!" : maxDmg > 0 ? `${maxDmg} DMG` : null;
+      const center = hasUlt ? "✨ SUPER ART!" : maxDmg >= 30 ? "💥 CRITICAL!" : maxDmg > 0 ? `${maxDmg} DMG` : null;
       if (center) {
         setMoveText(center);
         setMoveTextKey(k => k + 1);
         setTimeout(() => setMoveText(null), 1_600);
       }
     }
+    }, IMPACT_DELAY);
   }, [lastResult]);
+
+  // Reset lunge when phase changes away from resolving
+  useEffect(() => {
+    if (phase !== "resolving") { setLungeA(0); setLungeB(0); }
+  }, [phase]);
 
   const removeFA = useCallback((id: string) => setFloatA(p => p.filter(f => f.id !== id)), []);
   const removeFB = useCallback((id: string) => setFloatB(p => p.filter(f => f.id !== id)), []);
@@ -511,7 +599,7 @@ function BattleScreen({
               </div>
               {/* HP — drains left→right */}
               <div className="relative h-3 rounded-sm overflow-hidden bg-black/60">
-                <div className="absolute inset-y-0 left-0 transition-all duration-500 ease-out rounded-sm"
+                <div className={`absolute inset-y-0 left-0 transition-all duration-500 ease-out rounded-sm ${hpAPct<=20?"animate-low-hp-pulse":""}`}
                   style={{ width:`${hpAPct}%`, background:`linear-gradient(90deg,${hpACol}bb,${hpACol})`, boxShadow:`0 0 8px ${hpACol}99` }}/>
                 {[25,50,75].map(p=><div key={p} className="absolute inset-y-0 w-px bg-black/50" style={{left:`${p}%`}}/>)}
               </div>
@@ -540,7 +628,7 @@ function BattleScreen({
               </div>
               {/* HP — drains right→left */}
               <div className="relative h-3 rounded-sm overflow-hidden bg-black/60">
-                <div className="absolute inset-y-0 right-0 transition-all duration-500 ease-out rounded-sm"
+                <div className={`absolute inset-y-0 right-0 transition-all duration-500 ease-out rounded-sm ${hpBPct<=20?"animate-low-hp-pulse":""}`}
                   style={{width:`${hpBPct}%`, background:`linear-gradient(270deg,${hpBCol}bb,${hpBCol})`, boxShadow:`0 0 8px ${hpBCol}99`}}/>
                 {[25,50,75].map(p=><div key={p} className="absolute inset-y-0 w-px bg-black/50" style={{left:`${p}%`}}/>)}
               </div>
@@ -578,11 +666,49 @@ function BattleScreen({
           <FloatingCombatText items={floatB} onRemove={removeFB} />
         </div>
 
+        {/* ── SF3 PARRY text ─────────────────────────────────────────── */}
+        {showParry && (
+          <div key={parryKey}
+            className="absolute inset-x-0 z-30 flex justify-center pointer-events-none animate-parry-text"
+            style={{ top: "56%" }}>
+            <span className="font-display font-black text-sm tracking-[0.2em] text-cyan-300"
+              style={{ textShadow: "0 0 16px #22d3ee, 0 0 32px #22d3ee88, 0 1px 0 rgba(0,0,0,0.95)" }}>
+              ✦ PARRY ✦
+            </span>
+          </div>
+        )}
+
+        {/* ── SF6 COUNTER HIT text ───────────────────────────────────── */}
+        {showCounterHit && (
+          <div key={counterHitKey}
+            className="absolute pointer-events-none animate-counter-text z-30"
+            style={{
+              top:    "50%",
+              right:  counterHitSide === "B" ? "4%" : "auto",
+              left:   counterHitSide === "A" ? "4%" : "auto",
+            }}>
+            <span
+              className="font-display font-black tracking-tight"
+              style={{
+                fontSize: 10,
+                color: counterHitText.includes("PUNISH") ? "#ef4444" : "#f97316",
+                textShadow: counterHitText.includes("PUNISH")
+                  ? "0 0 10px #ef4444, 0 0 20px #ef444466, 0 1px 0 rgba(0,0,0,0.9)"
+                  : "0 0 10px #f97316, 0 0 20px #f9731666, 0 1px 0 rgba(0,0,0,0.9)",
+                letterSpacing: "0.08em",
+                display: "block",
+                whiteSpace: "nowrap",
+              }}>
+              {counterHitText}
+            </span>
+          </div>
+        )}
+
         {/* Centre cinematic move text */}
         {moveText && (
           <div key={moveTextKey} className="absolute inset-x-0 z-20 flex justify-center pointer-events-none" style={{top:"38%"}}>
             <span className={`font-display font-black tracking-widest animate-pop-in drop-shadow-xl
-              ${moveText.includes("ULTIMATE")?"text-4xl text-arena-primary [text-shadow:0_0_30px_#F6C90E,0_0_60px_#F6C90E]":
+              ${moveText.includes("SUPER")?"text-4xl text-arena-primary [text-shadow:0_0_30px_#F6C90E,0_0_60px_#F6C90E]":
                 moveText.includes("CRITICAL")?"text-3xl text-red-400 [text-shadow:0_0_20px_#ef4444]":
                 "text-2xl text-white/90"}`}>
               {moveText}
@@ -606,33 +732,83 @@ function BattleScreen({
           </div>
         )}
 
+        {/* ── DBFZ AFTERIMAGE — Champion A ghost trail ─────────────────── */}
+        {afterimageA && [28, 54].map((offset, i) => (
+          <div key={i}
+            className="absolute bottom-2 left-4 pointer-events-none"
+            style={{
+              transform: `translateX(${offset}px)`,
+              opacity: i === 0 ? 0.28 : 0.14,
+              filter: `blur(${i * 1.5 + 0.5}px) drop-shadow(0 0 12px ${champFxColor})`,
+              zIndex: 9 - i,
+              animation: `afterimage 0.42s ease-out ${i * 65}ms forwards`,
+            }}>
+            <ChampionArt class_={myClass} size={150} animated={false} />
+          </div>
+        ))}
+
+        {/* ── DBFZ AFTERIMAGE — Champion B ghost trail ─────────────────── */}
+        {afterimageB && [28, 54].map((offset, i) => (
+          <div key={i}
+            className="absolute bottom-2 right-4 pointer-events-none"
+            style={{
+              transform: `translateX(-${offset}px) scaleX(-1)`,
+              opacity: i === 0 ? 0.28 : 0.14,
+              filter: `blur(${i * 1.5 + 0.5}px) drop-shadow(0 0 12px ${opponentFxColor})`,
+              zIndex: 9 - i,
+              animation: `afterimage 0.42s ease-out ${i * 65}ms forwards`,
+            }}>
+            <ChampionArt class_={opponentClass} size={150} animated={false} />
+          </div>
+        ))}
+
         {/* ── CHAMPION A — left, facing right, large ───────────────────── */}
-        <div className={`absolute bottom-2 left-4 z-10 flex flex-col items-center
-          transition-transform duration-300
-          ${phase==="resolving"?"translate-x-8":""}
-          ${isDefeatA?"opacity-40 grayscale":""}`}
+        <div
+          className={`absolute bottom-2 left-4 z-10 flex flex-col items-center ${isDefeatA?"opacity-40 grayscale":""}`}
+          style={{
+            transform:  `translateX(${lungeA}px) scale(${lungeA > 0 ? 1.05 : 1})`,
+            transition: lungeA > 0
+              ? "transform 130ms ease-out"
+              : "transform 280ms cubic-bezier(0.34,1.56,0.64,1)",
+          }}
         >
           <div key={`cA-${animKeyA}-${flashKeyA}`}
             className={`relative ${shakeA?"animate-shake-hit":""} ${flashClass(flashA)}
-              ${isVictoryA?"animate-victory-pulse":""} ${isDefeatA?"animate-defeat-shake":""}`}
+              ${isVictoryA?"animate-victory-pulse":""} ${isDefeatA?"animate-defeat-shake":""}
+              ${phase==="resolving" && abilityFX.attackA?"animate-champ-charge":""}`}
           >
             <ChampionArt class_={myClass} size={150} animated={true} />
+            {/* DB Sparking! low-HP danger aura */}
+            {hpAPct <= 20 && !isDefeatA && (
+              <div className="absolute inset-0 rounded-full pointer-events-none animate-sparking-aura"
+                style={{ boxShadow:`0 0 24px ${champFxColor}, 0 0 48px ${champFxColor}66`, zIndex: -1 }}/>
+            )}
             {isVictoryA && <div className="absolute -top-8 left-1/2 -translate-x-1/2 text-3xl animate-bounce z-10">👑</div>}
           </div>
         </div>
 
         {/* ── CHAMPION B — right, mirrored, large ──────────────────────── */}
-        <div className={`absolute bottom-2 right-4 z-10 flex flex-col items-center
-          transition-transform duration-300
-          ${phase==="resolving"?"-translate-x-8":""}
-          ${isDefeatB?"opacity-40 grayscale":""}`}
+        <div
+          className={`absolute bottom-2 right-4 z-10 flex flex-col items-center ${isDefeatB?"opacity-40 grayscale":""}`}
+          style={{
+            transform:  `translateX(-${lungeB}px) scale(${lungeB > 0 ? 1.05 : 1})`,
+            transition: lungeB > 0
+              ? "transform 130ms ease-out"
+              : "transform 280ms cubic-bezier(0.34,1.56,0.64,1)",
+          }}
         >
           <div key={`cB-${animKeyB}-${flashKeyB}`}
             className={`relative ${shakeB?"animate-shake-hit":""} ${flashClass(flashB)}
-              ${isVictoryB?"animate-victory-pulse":""} ${isDefeatB?"animate-defeat-shake":""}`}
+              ${isVictoryB?"animate-victory-pulse":""} ${isDefeatB?"animate-defeat-shake":""}
+              ${phase==="resolving" && abilityFX.attackB?"animate-champ-charge":""}`}
             style={{transform:"scaleX(-1)"}}
           >
             <ChampionArt class_={opponentClass} size={150} animated={true} />
+            {/* DB Sparking! low-HP danger aura */}
+            {hpBPct <= 20 && !isDefeatB && (
+              <div className="absolute inset-0 rounded-full pointer-events-none animate-sparking-aura"
+                style={{ boxShadow:`0 0 24px ${opponentFxColor}, 0 0 48px ${opponentFxColor}66`, zIndex: -1 }}/>
+            )}
             {isVictoryB && (
               <div className="absolute -top-8 left-1/2 -translate-x-1/2 text-3xl animate-bounce z-10"
                 style={{transform:"scaleX(-1)"}}>👑</div>
@@ -640,27 +816,84 @@ function BattleScreen({
           </div>
         </div>
 
+        {/* ── ABILITY FX OVERLAY ───────────────────────────────────────── */}
+        <BattleAbilityFX
+          animKey={abilityFX.key}
+          classA={myClass}
+          classB={opponentClass}
+          attackA={abilityFX.attackA}
+          attackB={abilityFX.attackB}
+          selfA={abilityFX.selfA}
+          selfB={abilityFX.selfB}
+          ultA={abilityFX.ultA}
+          ultB={abilityFX.ultB}
+          statusA={battleState.statusA}
+          statusB={battleState.statusB}
+          charging={phase === "resolving"}
+        />
+
       </div>
       {/* ═══════════════════════ END ARENA ══════════════════════════════ */}
 
-      {/* ─── DRIVE / ENERGY GAUGE ──────────────────────────────────────── */}
-      <div className="shrink-0 px-3 pt-1.5 pb-1 bg-black flex items-center gap-2">
-        <div className="flex-1 flex gap-0.5">
-          {Array.from({length:6}).map((_,i)=>(
-            <div key={i} className="flex-1 h-2 rounded-[2px] transition-all duration-300"
-              style={{
-                background: i<battleState.energyA?"linear-gradient(90deg,#7c3aed,#c084fc)":"rgba(255,255,255,0.05)",
-                boxShadow:  i<battleState.energyA?"0 0 5px #a855f7":"none",
-              }}/>
-          ))}
-        </div>
-        <div className="shrink-0 text-[8px] text-white/20 font-mono px-1">
-          {phase==="resolving"?<span className="text-arena-primary animate-pulse">⚔️</span>:"⚡"}
-        </div>
-        <div className="flex-1 flex gap-0.5 opacity-25">
-          {Array.from({length:6}).map((_,i)=>(
-            <div key={i} className="flex-1 h-2 rounded-[2px]" style={{background:"rgba(255,255,255,0.08)"}}/>
-          ))}
+      {/* ─── SF6 DRIVE GAUGE ───────────────────────────────────────────── */}
+      <div className="shrink-0 px-3 pt-1.5 pb-1 bg-black">
+        <div className="flex items-center gap-2">
+
+          {/* Player side */}
+          <div className="flex-1">
+            <div className="flex items-center gap-1 mb-0.5">
+              <span className="text-[7px] font-bold tracking-[0.15em] text-amber-400/60 uppercase">Drive</span>
+              <span className="text-[7px] tabular-nums text-white/25">{battleState.energyA}/6</span>
+            </div>
+            <div className="flex gap-[2px]">
+              {Array.from({length:6}).map((_,i)=>{
+                const filled = i < battleState.energyA;
+                const isUltReady = battleState.energyA >= 3;
+                return (
+                  <div key={i}
+                    className={`flex-1 h-2.5 rounded-[2px] transition-all duration-300 ${filled && isUltReady && i>=2?"animate-drive-flash":""}`}
+                    style={{
+                      background: filled
+                        ? i >= 4
+                          ? "linear-gradient(90deg,#f97316,#fbbf24)"
+                          : i >= 2
+                            ? "linear-gradient(90deg,#fb923c,#f97316)"
+                            : "linear-gradient(90deg,#c2410c,#ea580c)"
+                        : "rgba(255,255,255,0.04)",
+                      boxShadow: filled
+                        ? isUltReady
+                          ? "0 0 6px #f9731688, inset 0 1px 0 rgba(255,255,255,0.25)"
+                          : "0 0 3px #f9731644, inset 0 1px 0 rgba(255,255,255,0.15)"
+                        : "inset 0 0 0 1px rgba(255,255,255,0.04)",
+                    }}/>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Centre indicator */}
+          <div className="shrink-0 text-center w-10">
+            <div className="text-[7px] text-white/15 font-mono uppercase tracking-widest mb-0.5">TURN</div>
+            <div className={`text-xl font-display font-black leading-none tabular-nums
+              ${phase==="resolving"?"text-arena-primary animate-pulse":phase==="result"?"text-purple-400":"text-white/70"}`}>
+              {battleState.turn}
+            </div>
+          </div>
+
+          {/* AI side — dimmed */}
+          <div className="flex-1 opacity-20">
+            <div className="flex items-center justify-end gap-1 mb-0.5">
+              <span className="text-[7px] tabular-nums text-white/40">{battleState.energyB ?? 0}/6</span>
+              <span className="text-[7px] font-bold tracking-[0.15em] text-white/40 uppercase">Drive</span>
+            </div>
+            <div className="flex gap-[2px]">
+              {Array.from({length:6}).map((_,i)=>(
+                <div key={i} className="flex-1 h-2.5 rounded-[2px]"
+                  style={{ background: "rgba(255,255,255,0.06)" }}/>
+              ))}
+            </div>
+          </div>
+
         </div>
       </div>
 

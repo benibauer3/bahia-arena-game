@@ -76,12 +76,12 @@ export default function Home() {
   });
   const { data: totalPool } = useReadContract({
     address: ACTIVE_CONTRACTS.ArenaManager, abi: ARENA_ABI,
-    functionName: "totalPoolBalance", query: { refetchInterval: 15_000 },
+    functionName: "totalDeposits", query: { refetchInterval: 15_000 },
   });
 
   const hasDeposit = !!deposit && (deposit as bigint) > 0n;
-  const usdtFmt   = usdtBal   ? parseFloat(formatUnits(usdtBal   as bigint, 18)).toFixed(2) : "—";
-  const poolFmt   = totalPool ? parseFloat(formatUnits(totalPool as bigint, 18)).toFixed(2) : "—";
+  const usdtFmt   = usdtBal   ? parseFloat(formatUnits(usdtBal   as bigint, 6)).toFixed(2) : "—";
+  const poolFmt   = totalPool ? parseFloat(formatUnits(totalPool as bigint, 6)).toFixed(2) : "—";
 
   return (
     <div className="flex flex-col bg-arena-bg min-h-screen pb-20">

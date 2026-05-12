@@ -288,15 +288,8 @@ export default function Arena() {
     query: { enabled: !!address, refetchInterval: 10_000 },
   });
 
-  const { data: activeBattleId } = useReadContract({
-    address: ACTIVE_CONTRACTS.ArenaManager,
-    abi: ARENA_ABI,
-    functionName: "playerActiveBattle",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address, refetchInterval: 8_000 },
-  });
-
-  const myActiveBattleId = activeBattleId ? (activeBattleId as bigint) - 1n : null;
+  // playerActiveBattle was removed from slim contract — active PvP battles use challenges instead
+  const myActiveBattleId = null;
   const canPlay          = isConnected && !!hasDeposit;
 
   // Intercept PvP actions — show gate if no deposit
@@ -362,20 +355,7 @@ export default function Arena() {
         </div>
       )}
 
-      {/* Active battle call-to-action */}
-      {myActiveBattleId !== null && myActiveBattleId >= 0n && (
-        <Link
-          to={`/battle/${myActiveBattleId.toString()}`}
-          className="flex items-center gap-3 p-3 rounded-2xl bg-arena-primary/10 border border-arena-primary/30 mb-4 active:scale-95 transition-transform"
-        >
-          <div className="w-2 h-2 rounded-full bg-arena-primary animate-ping" />
-          <div className="flex-1">
-            <p className="text-xs font-semibold text-arena-primary">You have an active battle!</p>
-            <p className="text-xs text-arena-muted">Battle #{myActiveBattleId.toString()} — tap to resolve ⚔️</p>
-          </div>
-          <span className="text-arena-primary text-lg">→</span>
-        </Link>
-      )}
+      {/* Active battle call-to-action — disabled (slim contract) */}
 
       {/* How PvP works */}
       <div className="rounded-xl bg-arena-surface border border-arena-border p-3 mb-4 flex items-start gap-3">
