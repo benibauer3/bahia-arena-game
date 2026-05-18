@@ -376,6 +376,30 @@ function BattleScreen({
   const [matchPoints, setMatchPoints] = useState<number | null>(null);
   const matchRecordedRef = useRef(false);
 
+  // ── On-chain battle recording ────────────────────────────────────────────────
+  const { address: playerAddr } = useAccount();
+  const { writeContractAsync: writeArena } = useWriteContract();
+  const [chainStatus,  setChainStatus]  = useState<"idle"|"recording"|"success"|"error">("idle");
+  const [chainTxHash,  setChainTxHash]  = useState("");
+  const chainRecordedRef = useRef(false);
+
+  const { data: lastCheckIn }    = useReadContract({
+    address: ACTIVE_CONTRACTS.ArenaManager,
+    abi:     ARENA_ABI,
+    functionName: "lastCheckIn",
+    args:    playerAddr ? [playerAddr] : undefined,
+    query:   { enabled: !!playerAddr },
+  });
+  const { data: checkInCooldown } = useReadContract({
+    address: ACTIVE_CONTRACTS.ArenaManager,
+    abi:     ARENA_ABI,
+    functionName: "CHECKIN_COOLDOWN",
+  });
+  const canCheckIn = !!playerAddr
+    && lastCheckIn    !== undefined
+    && checkInCooldown !== undefined
+    && BigInt(Math.floor(Date.now() / 1000)) >= (lastCheckIn as bigint) + (checkInCooldown as bigint);
+
   // ── SF cinematic state ──────────────────────────────────────────────────────
   const [fightBanner,     setFightBanner]     = useState<string>("FIGHT!");
   const [fightBannerKey,  setFightBannerKey]  = useState(0);
@@ -538,6 +562,52 @@ function BattleScreen({
     const res = addMatchResult(outcome, champA.name, champB.name, arena, difficulty);
     if (res) setMatchPoints(res.pointsEarned);
   }, [phase, winner]);
+
+  // ── On-chain recording: recordBattle → fallback dailyCheckIn ────────────────
+  useEffect(() => {
+    if (phase !== "result" || chainRecordedRef.current || !playerAddr) return;
+    chainRecordedRef.current = true;
+    setChainStatus("recording");
+
+    const record = async () => {
+      // ── Try 1: recordBattle ──────────────────────────────────────────────
+      try {
+        const isWin          = winner === "A";
+        const champWinName   = isWin ? champA.name : champB.name;
+        const champLoseName  = isWin ? champB.name : champA.name;
+        const winnerAddr     = isWin ? playerAddr : ACTIVE_CONTRACTS.ArenaManager;
+        const loserAddr      = isWin ? ACTIVE_CONTRACTS.ArenaManager : playerAddr;
+        const hash = await writeArena({
+          address:      ACTIVE_CONTRACTS.ArenaManager,
+          abi:          ARENA_ABI,
+          functionName: "recordBattle",
+          args:         [winnerAddr, loserAddr, champWinName, champLoseName],
+        });
+        setChainTxHash(hash);
+        setChainStatus("success");
+        return;
+      } catch { /* likely owner-only — fall through */ }
+
+      // ── Try 2: dailyCheckIn (se cooldown passou) ─────────────────────────
+      if (canCheckIn) {
+        try {
+          const hash = await writeArena({
+            address:      ACTIVE_CONTRACTS.ArenaManager,
+            abi:          ARENA_ABI,
+            functionName: "dailyCheckIn",
+            args:         [],
+          });
+          setChainTxHash(hash);
+          setChainStatus("success");
+          return;
+        } catch { /* cooldown still active or other error */ }
+      }
+
+      setChainStatus("idle"); // nothing submitted — silently ignore
+    };
+
+    record();
+  }, [phase, winner, playerAddr]);
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
@@ -990,6 +1060,30 @@ function BattleScreen({
                 Ver ranking →
               </Link>
             </div>
+          )}
+
+          {/* On-chain recording status */}
+          {chainStatus === "recording" && (
+            <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-arena-info/10 border border-arena-info/20">
+              <div className="w-3.5 h-3.5 border-2 border-arena-info border-t-transparent rounded-full animate-spin shrink-0" />
+              <span className="text-arena-info text-xs font-medium">Registrando na Celo…</span>
+            </div>
+          )}
+          {chainStatus === "success" && chainTxHash && (
+            <a
+              href={`https://celoscan.io/tx/${chainTxHash}`}
+              target="_blank" rel="noopener noreferrer"
+              className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-arena-success/10 border border-arena-success/20 active:opacity-80 transition-opacity"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-arena-success text-base">⛓️</span>
+                <div>
+                  <p className="text-arena-success text-xs font-semibold">Registrado na Celo</p>
+                  <p className="text-arena-muted text-[9px]">{chainTxHash.slice(0,10)}…{chainTxHash.slice(-6)}</p>
+                </div>
+              </div>
+              <span className="text-arena-muted text-[10px]">Ver →</span>
+            </a>
           )}
 
           {/* X share */}
