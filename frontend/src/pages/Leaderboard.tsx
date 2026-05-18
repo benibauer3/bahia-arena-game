@@ -359,7 +359,7 @@ export default function Leaderboard() {
             Crie um perfil para aparecer no ranking
           </p>
           <Link
-            to="/demo"
+            to="/play"
             className="inline-block px-4 py-2 rounded-xl bg-arena-primary text-arena-bg text-xs font-bold active:scale-95 transition-transform"
           >
             🎮 Jogar e Criar Perfil
@@ -392,7 +392,7 @@ export default function Leaderboard() {
           <span className="text-5xl">🏆</span>
           <p className="text-arena-muted text-sm">Seja o primeiro no ranking!</p>
           <Link
-            to="/demo"
+            to="/play"
             className="px-5 py-2.5 rounded-xl bg-arena-primary text-arena-bg font-semibold text-sm active:scale-95 transition-transform"
           >
             🎮 Batalhar agora
@@ -418,7 +418,7 @@ export default function Leaderboard() {
         <div className="space-y-2 text-xs text-arena-muted">
           <p>
             • Jogue em{" "}
-            <Link to="/demo" className="text-arena-primary font-semibold">Demo</Link>
+            <Link to="/play" className="text-arena-primary font-semibold">Demo</Link>
             {" "}— qualquer dificuldade conta para o ranking.
           </p>
           <p>

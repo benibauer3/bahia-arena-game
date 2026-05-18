@@ -89,8 +89,8 @@ function BottomNav() {
 
   const tabs = [
     { to: "/",            icon: "🏠", label: "Home"    },
-    { to: "/demo",        icon: "🎮", label: "Demo"    },
-    { to: "/arena",       icon: "⚔️",  label: "Arena"   },
+    { to: "/play",        icon: "⚔️",  label: "Play"    },
+    { to: "/arena",       icon: "🌐", label: "Arena"   },
     { to: "/leaderboard", icon: "🏆", label: "Ranking" },
     { to: "/profile",     icon: "👤", label: "Profile" },
   ];
@@ -99,7 +99,7 @@ function BottomNav() {
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-arena-surface/95 backdrop-blur-sm border-t border-arena-border safe-area-inset-bottom">
       <div className="grid grid-cols-5 max-w-md mx-auto">
         {tabs.map((tab) => {
-          const isDemo   = tab.to === "/demo";
+          const isDemo   = tab.to === "/play";
           const isActive = path === tab.to;
           return (
             <a
@@ -122,6 +122,7 @@ function BottomNav() {
               </span>
               {tab.label}
             </a>
+
           );
         })}
       </div>
@@ -136,8 +137,8 @@ function SidebarNav() {
 
   const items = [
     { to: "/",            icon: "🏠", label: "Home"      },
-    { to: "/demo",        icon: "🎮", label: "Demo"      },
-    { to: "/arena",       icon: "⚔️",  label: "Arena"     },
+    { to: "/play",        icon: "⚔️",  label: "Play"      },
+    { to: "/arena",       icon: "🌐", label: "Arena"     },
     { to: "/leaderboard", icon: "🏆", label: "Ranking"   },
     { to: "/roster",      icon: "🐉",  label: "Champions" },
     { to: "/pulse",       icon: "⚡", label: "Rewards"   },
@@ -161,7 +162,7 @@ function SidebarNav() {
         {items.map(item => {
           const isActive = path === item.to;
           const isPulse  = item.to === "/pulse";
-          const isDemo   = item.to === "/demo";
+          const isDemo   = item.to === "/play";
           return (
             <Link
               key={item.to}
@@ -271,7 +272,7 @@ export default function App() {
         <Route path="/battle/:id"  element={<Battle />}       />
         <Route path="/leaderboard" element={<Leaderboard />}  />
         <Route path="/roster"      element={<Roster />}       />
-        <Route path="/demo"        element={<Demo />}         />
+        <Route path="/play"        element={<Demo />}         />
         <Route path="/pulse"       element={<PulseRewards />} />
         <Route path="/profile"     element={<Profile />}      />
       </Routes>

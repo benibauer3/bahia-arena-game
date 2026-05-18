@@ -517,7 +517,7 @@ export default function Profile() {
         {matches.length === 0 ? (
           <div className="text-center py-4">
             <p className="text-sm text-arena-muted">No battles yet</p>
-            <Link to="/demo" className="mt-2 inline-block text-xs text-arena-primary underline">
+            <Link to="/play" className="mt-2 inline-block text-xs text-arena-primary underline">
               Play Demo to get started
             </Link>
           </div>

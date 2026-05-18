@@ -26,7 +26,7 @@ function ChampionArenaCard({ cls }: { cls: ChampionClass }) {
   const c = CHAMPIONS[cls];
   return (
     <Link
-      to="/demo"
+      to="/play"
       className="relative overflow-hidden rounded-2xl border border-white/10 active:scale-95 transition-transform block"
       style={{ height: 160 }}
     >
@@ -104,7 +104,7 @@ export default function Home() {
       {/* ── DEMO BATTLE ─────────────────────────────────────────────────────── */}
       <div className="px-4 mb-5">
         <Link
-          to="/demo"
+          to="/play"
           className="block w-full rounded-2xl overflow-hidden active:scale-[0.98] transition-transform"
           style={{
             background: "linear-gradient(135deg, #F6C90E 0%, #FF6B35 100%)",
@@ -228,7 +228,7 @@ export default function Home() {
         </div>
 
         {/* CTA final de demo — redundância intencional */}
-        <Link to="/demo"
+        <Link to="/play"
           className="mt-4 flex items-center justify-center gap-2 w-full py-4 rounded-2xl bg-arena-primary text-arena-bg font-bold text-base active:scale-95 transition-transform"
           style={{ boxShadow: "0 4px 20px rgba(246,201,14,0.3)" }}
         >

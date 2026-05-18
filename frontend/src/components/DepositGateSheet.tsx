@@ -41,7 +41,7 @@ export default function DepositGateSheet({ onClose }: Props) {
           Depósito necessário
         </h2>
         <p className="text-center text-xs text-arena-muted mb-6">
-          Para jogar PvP, deposite 1 USDT na arena pool
+          Deposite 1 USDT para entrar na arena — rende yield automático
         </p>
 
         {/* Benefits */}
@@ -83,20 +83,16 @@ export default function DepositGateSheet({ onClose }: Props) {
 
         {/* CTA */}
         <Link
-          to="/roster"
+          to="/play"
           onClick={onClose}
           className="block w-full py-4 rounded-2xl bg-arena-primary text-arena-bg font-bold text-center text-base active:scale-95 transition-transform"
           style={{ boxShadow: "0 4px 20px rgba(246,201,14,0.30)" }}
         >
-          💰 Depositar 1 USDT
+          ⚔️ Depositar e Jogar
         </Link>
 
-        {/* Demo free option */}
         <p className="text-center text-xs text-arena-muted mt-4">
-          Quer testar antes?{" "}
-          <Link to="/demo" onClick={onClose} className="text-arena-primary font-semibold">
-            Jogar Demo grátis →
-          </Link>
+          Seu principal (1 USDT) pode ser retirado a qualquer momento
         </p>
       </div>
     </div>

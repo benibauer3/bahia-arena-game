@@ -1,7 +1,8 @@
 /**
- * Demo.tsx — Batalha demo completa, sem carteira.
+ * Demo.tsx — Batalha vs IA. Requer carteira conectada + depósito de 1 USDT.
  *
  * Fluxo:
+ *  0. PlayGate        — verifica carteira + depósito
  *  1. ChampionPicker  — escolha seu campeão
  *  2. SetupScreen     — escolha dificuldade + arena
  *  3. BattleScreen    — batalha contra IA
@@ -9,6 +10,8 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Link }                         from "react-router-dom";
+import { useAccount, useReadContract, useWriteContract, useConnect } from "wagmi";
+import { injected }                     from "wagmi/connectors";
 import { CHAMPIONS, ChampionClass }     from "@/lib/champions";
 import { ChampionArt }                  from "@/components/ChampionArt";
 import CardHand                         from "@/components/CardHand";
@@ -20,6 +23,7 @@ import BahiaArenaLogo                   from "@/components/BahiaArenaLogo";
 import BattleAbilityFX                  from "@/components/BattleAbilityFX";
 import { usePlayerProfile }             from "@/hooks/usePlayerProfile";
 import { DIFF_PTS, STREAK_BONUS }       from "@/lib/playerStore";
+import { ACTIVE_CONTRACTS, ARENA_ABI, ERC20_ABI } from "@/lib/contracts";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -102,13 +106,13 @@ function ChampionPicker({ onPick }: { onPick: (c: ChampionClass) => void }) {
         <Link to="/" className="text-arena-muted text-xl shrink-0">←</Link>
         <BahiaArenaLogo size={38} showWordmark={false} />
         <div>
-          <p className="font-display text-arena-primary text-[10px] tracking-widest">DEMO BATTLE</p>
+          <p className="font-display text-arena-primary text-[10px] tracking-widest">BATTLE</p>
           <p className="text-xs text-arena-muted">Pick your champion</p>
         </div>
       </div>
 
       <div className="flex-1 p-4 pb-6">
-        <p className="text-[11px] text-arena-muted text-center mb-4">No wallet · AI opponent</p>
+        <p className="text-[11px] text-arena-muted text-center mb-4">VS AI · Wallet connected</p>
         <div className="grid grid-cols-2 gap-3">
           {CHAMPIONS.map(c => (
             <button
@@ -1032,6 +1036,199 @@ function BattleScreen({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PLAY GATE — wallet + deposit check
+// ─────────────────────────────────────────────────────────────────────────────
+
+function PlayGate({ children }: { children: React.ReactNode }) {
+  const { address, status } = useAccount();
+  const { connect, isPending: connecting } = useConnect();
+  const { writeContractAsync, isPending: depositing } = useWriteContract();
+  const [approving, setApproving] = useState(false);
+  const [depositErr, setDepositErr] = useState("");
+
+  // Check if this address has already deposited 1 USDT
+  const { data: hasDeposit, isLoading: checkingDeposit, refetch } = useReadContract({
+    address: ACTIVE_CONTRACTS.ArenaManager,
+    abi: ARENA_ABI,
+    functionName: "hasDeposit",
+    args: address ? [address] : undefined,
+    query: { enabled: !!address },
+  });
+
+  // USDT allowance for ArenaManager
+  const { data: allowance, refetch: refetchAllowance } = useReadContract({
+    address: ACTIVE_CONTRACTS.usdt,
+    abi: ERC20_ABI,
+    functionName: "allowance",
+    args: address ? [address, ACTIVE_CONTRACTS.ArenaManager] : undefined,
+    query: { enabled: !!address },
+  });
+
+  const ENTRY = BigInt(1_000_000); // 1 USDT (6 decimals)
+  const needsApproval = (allowance ?? BigInt(0)) < ENTRY;
+
+  const handleDeposit = async () => {
+    setDepositErr("");
+    try {
+      if (needsApproval) {
+        setApproving(true);
+        await writeContractAsync({
+          address: ACTIVE_CONTRACTS.usdt,
+          abi: ERC20_ABI,
+          functionName: "approve",
+          args: [ACTIVE_CONTRACTS.ArenaManager, ENTRY],
+        });
+        await refetchAllowance();
+        setApproving(false);
+      }
+      await writeContractAsync({
+        address: ACTIVE_CONTRACTS.ArenaManager,
+        abi: ARENA_ABI,
+        functionName: "deposit",
+        args: [],
+      });
+      await refetch();
+    } catch (e: any) {
+      setApproving(false);
+      setDepositErr(e.shortMessage ?? e.message ?? "Transaction failed");
+    }
+  };
+
+  // ── Still loading wallet status ──────────────────────────────────────────
+  if (status === "connecting" || status === "reconnecting") {
+    return (
+      <div className="min-h-screen bg-arena-bg flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-arena-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // ── Not connected ────────────────────────────────────────────────────────
+  if (status !== "connected" || !address) {
+    return (
+      <div className="min-h-screen bg-arena-bg flex flex-col items-center justify-center px-6 text-center gap-6">
+        {/* Logo */}
+        <BahiaArenaLogo size={80} showWordmark={true} />
+
+        {/* Lock badge */}
+        <div className="w-20 h-20 rounded-2xl bg-arena-primary/10 border border-arena-primary/30 flex items-center justify-center">
+          <span className="text-4xl">⚔️</span>
+        </div>
+
+        <div>
+          <h1 className="text-white text-xl font-bold mb-1">Pronto para batalhar?</h1>
+          <p className="text-arena-muted text-sm">Conecte sua wallet para entrar na arena</p>
+        </div>
+
+        <button
+          onClick={() => connect({ connector: injected() })}
+          disabled={connecting}
+          className="w-full max-w-xs py-4 rounded-2xl bg-arena-primary text-arena-bg font-bold text-base disabled:opacity-60 active:scale-95 transition-transform"
+          style={{ boxShadow: "0 4px 20px rgba(246,201,14,0.35)" }}
+        >
+          {connecting ? "Conectando…" : "🔗 Conectar Wallet"}
+        </button>
+
+        {/* Benefits list */}
+        <div className="w-full max-w-xs space-y-2.5 text-left">
+          {[
+            { icon: "🏦", text: "1 USDT rende yield automático na Aave V3" },
+            { icon: "🏆", text: "Dispute o ranking mensal e ganhe recompensas" },
+            { icon: "⚔️", text: "PvP ilimitado, sem custo por partida" },
+            { icon: "🔓", text: "Saque o principal a qualquer momento" },
+          ].map(b => (
+            <div key={b.text} className="flex items-start gap-3 p-3 rounded-xl bg-arena-surface border border-arena-border">
+              <span className="text-lg shrink-0">{b.icon}</span>
+              <p className="text-xs text-arena-muted">{b.text}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Connected but checking deposit status ────────────────────────────────
+  if (checkingDeposit) {
+    return (
+      <div className="min-h-screen bg-arena-bg flex items-center justify-center gap-3">
+        <div className="w-6 h-6 border-2 border-arena-primary border-t-transparent rounded-full animate-spin" />
+        <span className="text-arena-muted text-sm">Verificando depósito…</span>
+      </div>
+    );
+  }
+
+  // ── Connected but no deposit ─────────────────────────────────────────────
+  if (!hasDeposit) {
+    const busy = approving || depositing;
+    return (
+      <div className="min-h-screen bg-arena-bg flex flex-col items-center justify-center px-6 text-center gap-6">
+        <BahiaArenaLogo size={70} showWordmark={true} />
+
+        <div className="w-20 h-20 rounded-2xl bg-arena-primary/10 border border-arena-primary/30 flex items-center justify-center">
+          <span className="text-4xl">🔒</span>
+        </div>
+
+        <div>
+          <h1 className="text-white text-xl font-bold mb-1">Deposite 1 USDT</h1>
+          <p className="text-arena-muted text-sm">
+            Seu depósito fica na Aave V3 rendendo yield enquanto você joga
+          </p>
+        </div>
+
+        {/* Steps indicator */}
+        <div className="w-full max-w-xs flex items-center gap-2 text-xs">
+          <div className={`flex-1 flex items-center gap-1.5 p-2 rounded-xl border ${!needsApproval ? "border-arena-success/40 bg-arena-success/5 text-arena-success" : "border-arena-border bg-arena-surface text-arena-muted"}`}>
+            <span>{!needsApproval ? "✅" : "1️⃣"}</span>
+            <span>Aprovar USDT</span>
+          </div>
+          <span className="text-arena-border">→</span>
+          <div className="flex-1 flex items-center gap-1.5 p-2 rounded-xl border border-arena-border bg-arena-surface text-arena-muted">
+            <span>2️⃣</span>
+            <span>Depositar</span>
+          </div>
+        </div>
+
+        <button
+          onClick={handleDeposit}
+          disabled={busy}
+          className="w-full max-w-xs py-4 rounded-2xl bg-arena-primary text-arena-bg font-bold text-base disabled:opacity-60 active:scale-95 transition-transform"
+          style={{ boxShadow: "0 4px 20px rgba(246,201,14,0.35)" }}
+        >
+          {approving
+            ? "⏳ Aprovando USDT…"
+            : depositing
+            ? "⏳ Depositando…"
+            : needsApproval
+            ? "💰 Aprovar + Depositar 1 USDT"
+            : "💰 Depositar 1 USDT"}
+        </button>
+
+        {depositErr && (
+          <p className="text-arena-danger text-xs max-w-xs">{depositErr}</p>
+        )}
+
+        {/* Benefits */}
+        <div className="w-full max-w-xs space-y-2 text-left">
+          {[
+            { icon: "📈", text: "Yield automático — seu 1 USDT cresce enquanto você joga" },
+            { icon: "🏆", text: "Top 10 do ranking recebe parte do yield todo dia 30" },
+            { icon: "🔓", text: "Saque o principal a qualquer momento" },
+          ].map(b => (
+            <div key={b.text} className="flex items-start gap-3 p-3 rounded-xl bg-arena-surface border border-arena-border">
+              <span className="text-lg shrink-0">{b.icon}</span>
+              <p className="text-xs text-arena-muted">{b.text}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ── All good — render the battle UI ─────────────────────────────────────
+  return <>{children}</>;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PAGE ROOT
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1062,12 +1259,12 @@ export default function DemoPage() {
     setStage("pick");
   };
 
-  if (stage === "pick") return <ChampionPicker onPick={handlePick} />;
-  if (stage === "setup" && myClass !== null) {
-    return <SetupScreen myClass={myClass} onStart={handleStart} onBack={() => setStage("pick")} />;
-  }
-  if (stage === "battle" && myClass !== null && opponentClass !== null && config !== null) {
-    return (
+  const inner =
+    stage === "pick" ? (
+      <ChampionPicker onPick={handlePick} />
+    ) : stage === "setup" && myClass !== null ? (
+      <SetupScreen myClass={myClass} onStart={handleStart} onBack={() => setStage("pick")} />
+    ) : stage === "battle" && myClass !== null && opponentClass !== null && config !== null ? (
       <BattleScreen
         myClass={myClass}
         opponentClass={opponentClass}
@@ -1075,7 +1272,7 @@ export default function DemoPage() {
         arena={config.arena}
         onReset={handleReset}
       />
-    );
-  }
-  return null;
+    ) : null;
+
+  return <PlayGate>{inner}</PlayGate>;
 }
