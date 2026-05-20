@@ -58,6 +58,17 @@ export default {
         "status-burn":     "statusBurn 0.75s ease-in-out infinite",
         "status-stun":     "statusStun 1.3s linear infinite",
         "status-root":     "statusRoot 2.5s ease-in-out infinite",
+        // ── champion idle breathing ────────────────────────────
+        "champ-idle":      "champIdle 2.2s ease-in-out infinite",
+        // ── per-champion attack poses ──────────────────────────
+        "champ-stomp":     "champStomp 0.38s cubic-bezier(0.25,0.46,0.45,0.94) forwards",
+        "champ-rise":      "champRise  0.36s cubic-bezier(0.34,1.56,0.64,1) forwards",
+        "champ-coil":      "champCoil  0.32s ease-out forwards",
+        "champ-blink":     "champBlink 0.30s ease-out forwards",
+        "champ-bolt":      "champBolt  0.34s cubic-bezier(0.25,0.46,0.45,0.94) forwards",
+        // ── clash burst (centre of arena when both attack) ────
+        "clash-burst":     "clashBurst 0.55s ease-out forwards",
+        "clash-ring":      "clashRing  0.60s ease-out forwards",
         // ── champion charge-up before firing ──────────────────
         "champ-charge":    "champCharge 0.2s ease-out forwards",
         // ── SF3 / SF6 / DBFZ / DB Sparking! ──────────────────
@@ -208,6 +219,61 @@ export default {
         statusRoot: {
           "0%, 100%": { opacity: "0.8", transform: "scale(1)" },
           "50%":      { opacity: "0.3", transform: "scale(0.92)" },
+        },
+        // ── champion idle breathing ──
+        champIdle: {
+          "0%, 100%": { transform: "translateY(0) scale(1)"     },
+          "50%":      { transform: "translateY(-7px) scale(1.03)" },
+        },
+        // ── Curupira: ground stomp ──
+        champStomp: {
+          "0%":   { transform: "translateY(0)    scaleX(1.0)  scaleY(1.0)"  },
+          "20%":  { transform: "translateY(-16px) scaleX(0.90) scaleY(1.10)" },
+          "55%":  { transform: "translateY(5px)  scaleX(1.10) scaleY(0.88)" },
+          "80%":  { transform: "translateY(-3px) scaleX(1.0)  scaleY(1.0)"  },
+          "100%": { transform: "translateY(0)    scaleX(1.0)  scaleY(1.0)"  },
+        },
+        // ── Iara: float & wave ──
+        champRise: {
+          "0%":   { transform: "translateY(0)     rotate(0deg)  scale(1)"    },
+          "35%":  { transform: "translateY(-22px)  rotate(-10deg) scale(1.10)" },
+          "70%":  { transform: "translateY(-8px)  rotate(4deg)  scale(1.05)" },
+          "100%": { transform: "translateY(0)     rotate(0deg)  scale(1)"    },
+        },
+        // ── Boitatá: coil-and-strike ──
+        champCoil: {
+          "0%":   { transform: "translateX(0)    scaleX(0.82) rotate(0deg)"   },
+          "30%":  { transform: "translateX(22px)  scaleX(1.14) rotate(6deg)"   },
+          "65%":  { transform: "translateX(8px)  scaleX(1.0)  rotate(-3deg)"  },
+          "100%": { transform: "translateX(0)    scaleX(1.0)  rotate(0deg)"   },
+        },
+        // ── Anhangá: shadow blink ──
+        champBlink: {
+          "0%":   { transform: "translateX(0)    scaleX(1)",   opacity: "1"   },
+          "25%":  { transform: "translateX(28px)  scaleX(0.5)", opacity: "0.1" },
+          "55%":  { transform: "translateX(0)    scaleX(1.15)", opacity: "1"   },
+          "80%":  { transform: "translateX(-4px) scaleX(0.98)", opacity: "1"   },
+          "100%": { transform: "translateX(0)    scaleX(1.0)",  opacity: "1"   },
+        },
+        // ── Tupã: lightning leap ──
+        champBolt: {
+          "0%":   { transform: "translateY(0)     translateX(0)   rotate(0deg)"   },
+          "25%":  { transform: "translateY(-24px)  translateX(18px) rotate(-15deg)" },
+          "60%":  { transform: "translateY(4px)   translateX(0)   rotate(5deg)"   },
+          "85%":  { transform: "translateY(-4px)  translateX(0)   rotate(-2deg)"  },
+          "100%": { transform: "translateY(0)     translateX(0)   rotate(0deg)"   },
+        },
+        // ── Clash burst (centre of arena) ──
+        clashBurst: {
+          "0%":   { transform: "scale(0)",   opacity: "0" },
+          "22%":  { transform: "scale(1.3)", opacity: "1" },
+          "65%":  { transform: "scale(2.8)", opacity: "0.65" },
+          "100%": { transform: "scale(4.5)", opacity: "0" },
+        },
+        clashRing: {
+          "0%":   { transform: "scale(0.5)", opacity: "0" },
+          "18%":  { transform: "scale(1.0)", opacity: "0.9" },
+          "100%": { transform: "scale(3.2)", opacity: "0" },
         },
         // ── charge-up flash before firing ──
         champCharge: {

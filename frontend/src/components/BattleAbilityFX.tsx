@@ -461,8 +461,8 @@ function LightningStrike({ color, glow }: { color: string; glow: string }) {
 
 // ─── Ground Strike wrapper — scales from attacker's side outward ──────────────
 
-function GroundStrike({ shape, color, glow, fromLeft, animKey }: {
-  shape: Shape; color: string; glow: string; fromLeft: boolean; animKey: number;
+function GroundStrike({ shape, color, glow, fromLeft, animKey, bottomOffset = "2%" }: {
+  shape: Shape; color: string; glow: string; fromLeft: boolean; animKey: number; bottomOffset?: string;
 }) {
   const origin = fromLeft ? "left center" : "right center";
   return (
@@ -472,7 +472,7 @@ function GroundStrike({ shape, color, glow, fromLeft, animKey }: {
       style={{
         left:            fromLeft ? "15%" : "auto",
         right:           fromLeft ? "auto" : "15%",
-        bottom:          "2%",
+        bottom:          bottomOffset,
         width:           "70%",
         height:          88,
         zIndex:          22,
@@ -486,6 +486,76 @@ function GroundStrike({ shape, color, glow, fromLeft, animKey }: {
         {shape === "fire"      && <FireStrike      color={color} glow={glow}/>}
         {shape === "shadow"    && <ShadowStrike    color={color} glow={glow}/>}
         {shape === "lightning" && <LightningStrike color={color} glow={glow}/>}
+      </div>
+    </div>
+  );
+}
+
+// ─── Clash Burst — when BOTH champions attack the same turn ──────────────────
+
+function ClashBurst({ colorA, glowA, colorB, glowB, animKey }: {
+  colorA: string; glowA: string; colorB: string; glowB: string; animKey: number;
+}) {
+  return (
+    <div key={`clash-${animKey}`}
+      className="absolute pointer-events-none"
+      style={{ left: "50%", bottom: "22%", transform: "translate(-50%, 50%)", zIndex: 28 }}
+    >
+      {/* Outer mixed-color ring */}
+      <div className="absolute animate-clash-ring"
+        style={{
+          width: 120, height: 120,
+          top: "50%", left: "50%",
+          transform: "translate(-50%, -50%)",
+          borderRadius: "50%",
+          border: `3px solid ${glowA}`,
+          boxShadow: `0 0 20px ${glowA}, inset 0 0 20px ${glowB}44`,
+        }}/>
+      <div className="absolute animate-clash-ring"
+        style={{
+          width: 120, height: 120,
+          top: "50%", left: "50%",
+          transform: "translate(-50%, -50%)",
+          borderRadius: "50%",
+          border: `3px solid ${glowB}`,
+          boxShadow: `0 0 20px ${glowB}`,
+          animationDelay: "60ms",
+        }}/>
+      {/* Core burst SVG */}
+      <svg width="120" height="120" viewBox="-60 -60 120 120"
+        className="animate-clash-burst"
+        style={{ overflow: "visible", animationDelay: "30ms" }}>
+        {/* 12 radial clash lines alternating both colors */}
+        {Array.from({length:12}).map((_, i) => (
+          <line key={i}
+            x1={i % 3 === 0 ? 14 : 10} y1="0"
+            x2={i % 3 === 0 ? 52 : 42} y2="0"
+            stroke={i % 2 === 0 ? glowA : glowB}
+            strokeWidth={i % 3 === 0 ? 4.5 : 2.8}
+            strokeLinecap="round"
+            transform={`rotate(${i * 30})`}/>
+        ))}
+        {/* Thin accent spokes */}
+        {[15,75,135,195,255,315].map((angle, i) => (
+          <line key={`s${i}`}
+            x1="6" y1="0" x2="28" y2="0"
+            stroke="white" strokeWidth="2" strokeLinecap="round"
+            transform={`rotate(${angle})`} opacity="0.9"/>
+        ))}
+        {/* Core glow */}
+        <circle r="18" fill={glowA} opacity="0.6"/>
+        <circle r="10" fill={glowB} opacity="0.7"/>
+        <circle r="5"  fill="white" opacity="0.95"/>
+      </svg>
+      {/* "CLASH!" text */}
+      <div
+        className="absolute inset-x-0 text-center pointer-events-none animate-pop-in"
+        style={{ top: -32, animationDelay: "120ms" }}
+      >
+        <span className="font-display font-black text-[10px] tracking-[0.18em] text-white"
+          style={{ textShadow: `0 0 12px ${glowA}, 0 0 24px ${glowB}, 0 1px 0 rgba(0,0,0,0.95)` }}>
+          ⚡ CLASH!
+        </span>
       </div>
     </div>
   );
@@ -538,6 +608,7 @@ export default function BattleAbilityFX({
         <GroundStrike
           shape={fxA.shape} color={fxA.color} glow={fxA.glow}
           fromLeft={true} animKey={animKey}
+          bottomOffset={attackB && !ultB ? "10%" : "2%"}
         />
       )}
 
@@ -548,6 +619,18 @@ export default function BattleAbilityFX({
         <GroundStrike
           shape={fxB.shape} color={fxB.color} glow={fxB.glow}
           fromLeft={false} animKey={animKey}
+          bottomOffset="2%"
+        />
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════
+          CLASH BURST — both attack same turn (centre of arena)
+      ══════════════════════════════════════════════════════════════════ */}
+      {attackA && attackB && !ultA && !ultB && (
+        <ClashBurst
+          colorA={fxA.color} glowA={fxA.glow}
+          colorB={fxB.color} glowB={fxB.glow}
+          animKey={animKey}
         />
       )}
 

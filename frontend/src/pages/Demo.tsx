@@ -29,6 +29,15 @@ import { ACTIVE_CONTRACTS, ARENA_ABI, ERC20_ABI } from "@/lib/contracts";
 
 type FlashType = "hit" | "heal" | "shield" | "ultimate" | null;
 
+// ── Per-champion attack animation class (CSS) ─────────────────────────────────
+const CHAMP_ATTACK_ANIM: Record<ChampionClass, string> = {
+  [ChampionClass.CURUPIRA]: "animate-champ-stomp",  // ground slam
+  [ChampionClass.IARA]:     "animate-champ-rise",   // float & wave
+  [ChampionClass.BOITATA]:  "animate-champ-coil",   // coil-and-strike
+  [ChampionClass.ANHANGA]:  "animate-champ-blink",  // shadow blink
+  [ChampionClass.TUPA]:     "animate-champ-bolt",   // lightning leap
+};
+
 // Per-champion FX color (matches BattleAbilityFX theme)
 const CHAMP_FX_COLOR: Record<ChampionClass, string> = {
   [ChampionClass.CURUPIRA]: "#22c55e",
@@ -370,6 +379,8 @@ function BattleScreen({
   const [parryKey,       setParryKey]       = useState(0);
   const [lungeA,         setLungeA]         = useState(0);   // px offset toward B
   const [lungeB,         setLungeB]         = useState(0);   // px offset toward A
+  const [attackingA,     setAttackingA]     = useState(false); // triggers per-class attack anim
+  const [attackingB,     setAttackingB]     = useState(false);
   const [screenFlashKey, setScreenFlashKey] = useState(0);
   const lastTurnRef = useRef(-1);
   const { addMatchResult, profile: playerProfile, isConnected } = usePlayerProfile();
@@ -480,11 +491,17 @@ function BattleScreen({
     // ── Delay impact effects until projectile/beam lands ─────────────────
     const IMPACT_DELAY = (atA || atB) ? (uA || uB ? 420 : 350) : 0;
 
-    // ── Champion lunge toward opponent (makes it look like they're striking) ─
-    if (atA) { setLungeA(52); setTimeout(() => setLungeA(0), IMPACT_DELAY + 30); }
-    else setLungeA(0);
-    if (atB) { setLungeB(52); setTimeout(() => setLungeB(0), IMPACT_DELAY + 30); }
-    else setLungeB(0);
+    // ── Champion lunge + per-class attack animation ───────────────────────────
+    if (atA) {
+      setLungeA(62);
+      setAttackingA(true);
+      setTimeout(() => { setLungeA(0); setAttackingA(false); }, IMPACT_DELAY + 40);
+    } else { setLungeA(0); }
+    if (atB) {
+      setLungeB(62);
+      setAttackingB(true);
+      setTimeout(() => { setLungeB(0); setAttackingB(false); }, IMPACT_DELAY + 40);
+    } else { setLungeB(0); }
     const capturedFA = fA, capturedFB = fB;
     setTimeout(() => {
     if (nFA.length) setFloatA(p => [...p, ...nFA]);
@@ -530,9 +547,12 @@ function BattleScreen({
     }, IMPACT_DELAY);
   }, [lastResult]);
 
-  // Reset lunge when phase changes away from resolving
+  // Reset lunge + attack anim when phase changes away from resolving
   useEffect(() => {
-    if (phase !== "resolving") { setLungeA(0); setLungeB(0); }
+    if (phase !== "resolving") {
+      setLungeA(0); setLungeB(0);
+      setAttackingA(false); setAttackingB(false);
+    }
   }, [phase]);
 
   const removeFA = useCallback((id: string) => setFloatA(p => p.filter(f => f.id !== id)), []);
@@ -838,18 +858,20 @@ function BattleScreen({
 
         {/* ── CHAMPION A — left, facing right, large ───────────────────── */}
         <div
-          className={`absolute bottom-2 left-4 z-10 flex flex-col items-center ${isDefeatA?"opacity-40 grayscale":""}`}
+          className={`absolute bottom-2 left-4 z-10 flex flex-col items-center ${isDefeatA?"opacity-40 grayscale":""}
+            ${phase==="choose" && !attackingA ? "animate-champ-idle" : ""}`}
           style={{
-            transform:  `translateX(${lungeA}px) scale(${lungeA > 0 ? 1.05 : 1})`,
+            transform:  `translateX(${lungeA}px) scale(${lungeA > 0 ? 1.06 : 1})`,
             transition: lungeA > 0
-              ? "transform 130ms ease-out"
-              : "transform 280ms cubic-bezier(0.34,1.56,0.64,1)",
+              ? "transform 110ms ease-out"
+              : "transform 300ms cubic-bezier(0.34,1.56,0.64,1)",
           }}
         >
           <div key={`cA-${animKeyA}-${flashKeyA}`}
             className={`relative ${shakeA?"animate-shake-hit":""} ${flashClass(flashA)}
               ${isVictoryA?"animate-victory-pulse":""} ${isDefeatA?"animate-defeat-shake":""}
-              ${phase==="resolving" && abilityFX.attackA?"animate-champ-charge":""}`}
+              ${attackingA ? CHAMP_ATTACK_ANIM[myClass] : ""}
+              ${phase==="resolving" && abilityFX.attackA && !attackingA ? "animate-champ-charge" : ""}`}
           >
             <ChampionArt class_={myClass} size={150} animated={true} />
             {/* DB Sparking! low-HP danger aura */}
@@ -863,18 +885,21 @@ function BattleScreen({
 
         {/* ── CHAMPION B — right, mirrored, large ──────────────────────── */}
         <div
-          className={`absolute bottom-2 right-4 z-10 flex flex-col items-center ${isDefeatB?"opacity-40 grayscale":""}`}
+          className={`absolute bottom-2 right-4 z-10 flex flex-col items-center ${isDefeatB?"opacity-40 grayscale":""}
+            ${phase==="choose" && !attackingB ? "animate-champ-idle" : ""}`}
           style={{
-            transform:  `translateX(-${lungeB}px) scale(${lungeB > 0 ? 1.05 : 1})`,
+            transform:  `translateX(-${lungeB}px) scale(${lungeB > 0 ? 1.06 : 1})`,
             transition: lungeB > 0
-              ? "transform 130ms ease-out"
-              : "transform 280ms cubic-bezier(0.34,1.56,0.64,1)",
+              ? "transform 110ms ease-out"
+              : "transform 300ms cubic-bezier(0.34,1.56,0.64,1)",
+            animationDelay: "0.5s",
           }}
         >
           <div key={`cB-${animKeyB}-${flashKeyB}`}
             className={`relative ${shakeB?"animate-shake-hit":""} ${flashClass(flashB)}
               ${isVictoryB?"animate-victory-pulse":""} ${isDefeatB?"animate-defeat-shake":""}
-              ${phase==="resolving" && abilityFX.attackB?"animate-champ-charge":""}`}
+              ${attackingB ? CHAMP_ATTACK_ANIM[opponentClass] : ""}
+              ${phase==="resolving" && abilityFX.attackB && !attackingB ? "animate-champ-charge" : ""}`}
             style={{transform:"scaleX(-1)"}}
           >
             <ChampionArt class_={opponentClass} size={150} animated={true} />
