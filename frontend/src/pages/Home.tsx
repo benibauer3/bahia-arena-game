@@ -115,8 +115,8 @@ export default function Home() {
             {/* Texto principal */}
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-arena-bg font-bold text-xl leading-tight">🎮 DEMO BATTLE</p>
-                <p className="text-arena-bg/70 text-xs mt-0.5 font-medium">Play now — no wallet needed</p>
+                <p className="text-arena-bg font-bold text-xl leading-tight">⚔️ BATTLE</p>
+                <p className="text-arena-bg/70 text-xs mt-0.5 font-medium">Escolha seu campeão e batalhe</p>
               </div>
               <div className="text-4xl animate-float">⚔️</div>
             </div>
@@ -210,7 +210,7 @@ export default function Home() {
         <p className="text-xs font-semibold text-white uppercase tracking-wider mb-3">How It Works</p>
         <div className="space-y-2">
           {[
-            { n:"1", emoji:"🎮", title:"Play the Demo",        desc:"No wallet needed. Pick a champion and fight now.",         color:"bg-yellow-500" },
+            { n:"1", emoji:"⚔️",  title:"Escolha seu Campeão",  desc:"5 campeões da mitologia brasileira, cada um com poderes únicos.", color:"bg-yellow-500" },
             { n:"2", emoji:"💰", title:"Deposit 1 USDT",       desc:"Deposited into Aave V3 to generate yield automatically.", color:"bg-green-500"  },
             { n:"3", emoji:"🃏", title:"Card Battles",         desc:"3 basic + 1 ultimate per champion. Up to 2 cards per turn.", color:"bg-blue-500" },
             { n:"4", emoji:"🏆", title:"Monthly Ranking",      desc:"Top 10 share 60% of yield. Withdraw anytime.",            color:"bg-purple-500" },
@@ -232,7 +232,7 @@ export default function Home() {
           className="mt-4 flex items-center justify-center gap-2 w-full py-4 rounded-2xl bg-arena-primary text-arena-bg font-bold text-base active:scale-95 transition-transform"
           style={{ boxShadow: "0 4px 20px rgba(246,201,14,0.3)" }}
         >
-          🎮 PLAY FREE DEMO
+          ⚔️ ENTRAR NA ARENA
         </Link>
       </div>
     </div>
