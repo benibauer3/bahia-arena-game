@@ -676,7 +676,7 @@ function BattleScreen({
               onClick={onReset}
               className="w-7 h-7 flex items-center justify-center rounded-full bg-black/60 backdrop-blur-sm text-white text-sm active:scale-90 transition-transform"
             >←</button>
-            <span className="font-display text-[9px] text-white/35 tracking-[0.2em]">DEMO BATTLE</span>
+            <span className="font-display text-[9px] text-white/35 tracking-[0.2em]">BATTLE ARENA</span>
             <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full backdrop-blur-sm ${DIFF_BADGE[difficulty]}`}>
               {DIFF_LABEL[difficulty].toUpperCase()}
             </span>

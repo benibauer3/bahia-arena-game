@@ -3,7 +3,7 @@
  *
  * Layout (top → bottom, sempre visível):
  *  1. Header compacto
- *  2. DEMO BATTLE — botão gigante, primeiro elemento de destaque
+ *  2. BATTLE — botão gigante, primeiro elemento de destaque
  *  3. Grade de campeões (2 colunas) — arte SVG + arena de fundo
  *  4. Wallet connect + status
  *  5. Como funciona
@@ -101,7 +101,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* ── DEMO BATTLE ─────────────────────────────────────────────────────── */}
+      {/* ── BATTLE ──────────────────────────────────────────────────────────── */}
       <div className="px-4 mb-5">
         <Link
           to="/play"
