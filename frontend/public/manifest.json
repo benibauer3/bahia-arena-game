@@ -1,0 +1,20 @@
+{
+  "name": "Bahia Arena",
+  "short_name": "Bahia Arena",
+  "description": "Batalhas de Campeões na Celo — deposite 1 USDT e entre na arena",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0D1117",
+  "theme_color": "#F6C90E",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["games", "entertainment"],
+  "lang": "pt-BR"
+}
