@@ -136,13 +136,26 @@ function ChampionPicker({ onPick }: { onPick: (c: ChampionClass) => void }) {
                 <ChampionArt class_={c.class} size={80} animated={true} />
               </div>
               <div className={`absolute inset-0 rounded-2xl border-2 ${c.borderColor} pointer-events-none`} />
-              <div className="absolute bottom-0 left-0 right-0 px-3 pb-3">
-                <p className="text-white text-sm font-bold">{c.name}</p>
-                <p className="text-white/60 text-[10px]">{c.role}</p>
-                <div className="flex gap-1.5 mt-1 flex-wrap">
-                  <span className="text-[9px] bg-white/10 text-white/70 px-1.5 py-0.5 rounded">⚔️{c.attack}</span>
-                  <span className="text-[9px] bg-white/10 text-white/70 px-1.5 py-0.5 rounded">🛡️{c.defense}</span>
-                  <span className="text-[9px] bg-white/10 text-white/70 px-1.5 py-0.5 rounded">⚡{c.speed}</span>
+              <div className="absolute bottom-0 left-0 right-0 px-3 pb-2.5">
+                <p className="text-white text-sm font-bold leading-tight">{c.name}</p>
+                <p className="text-white/60 text-[9px] mb-1.5">{c.role}</p>
+                {/* Stat bars */}
+                <div className="space-y-0.5">
+                  {[
+                    { label:"ATK", value: c.attack,  max: 60, color:"bg-red-400"    },
+                    { label:"DEF", value: c.defense, max: 50, color:"bg-blue-400"   },
+                    { label:"SPD", value: c.speed,   max: 40, color:"bg-yellow-400" },
+                  ].map(s => (
+                    <div key={s.label} className="flex items-center gap-1">
+                      <span className="text-[7px] text-white/50 w-5 shrink-0">{s.label}</span>
+                      <div className="flex-1 h-1 rounded-full bg-black/40">
+                        <div
+                          className={`h-1 rounded-full ${s.color}`}
+                          style={{ width: `${Math.round((s.value / s.max) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
               <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm rounded-full px-1.5 py-0.5">
