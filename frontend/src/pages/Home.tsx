@@ -19,6 +19,7 @@ import { ChampionArt }                 from "@/components/ChampionArt";
 import { BattleArenaBackground }       from "@/components/BattleArena";
 import BahiaArenaLogo                  from "@/components/BahiaArenaLogo";
 import { useViewMode }                 from "@/lib/viewModeContext";
+import { getProfile }                  from "@/lib/playerStore";
 
 // ─── Champion card com arena de fundo ─────────────────────────────────────────
 
@@ -83,6 +84,12 @@ export default function Home() {
   const usdtFmt   = usdtBal   ? parseFloat(formatUnits(usdtBal   as bigint, 6)).toFixed(2) : "—";
   const poolFmt   = totalPool ? parseFloat(formatUnits(totalPool as bigint, 6)).toFixed(2) : "—";
 
+  // Player local stats (from localStorage)
+  const profile   = address ? getProfile(address) : null;
+  const streak    = profile?.streak    ?? 0;
+  const wins      = profile?.wins      ?? 0;
+  const totalPts  = profile?.points    ?? 0;
+
   return (
     <div className="flex flex-col bg-arena-bg min-h-screen pb-20">
 
@@ -93,6 +100,34 @@ export default function Home() {
           <span className="text-[10px] text-arena-muted">Celo</span>
         </div>
       </div>
+
+      {/* ── STREAK BANNER (só quando conectado e tem histórico) ─────────────── */}
+      {isConnected && profile && (wins > 0 || streak > 0) && (
+        <div className="mx-4 mb-2 flex items-center justify-between px-4 py-2.5 rounded-xl bg-arena-surface border border-arena-border">
+          <div className="flex items-center gap-3">
+            <div className="text-center">
+              <p className="text-arena-primary font-bold text-base tabular-nums leading-none">{wins}</p>
+              <p className="text-[9px] text-arena-muted mt-0.5">vitórias</p>
+            </div>
+            <div className="w-px h-6 bg-arena-border" />
+            <div className="text-center">
+              <p className="text-white font-bold text-base tabular-nums leading-none">{totalPts}</p>
+              <p className="text-[9px] text-arena-muted mt-0.5">pontos</p>
+            </div>
+          </div>
+          {streak >= 2 && (
+            <div className="flex items-center gap-1 bg-orange-500/15 border border-orange-500/30 px-2.5 py-1 rounded-full">
+              <span className="text-sm">🔥</span>
+              <span className="text-orange-400 font-bold text-xs">{streak}x streak</span>
+            </div>
+          )}
+          {streak < 2 && (
+            <Link to="/leaderboard" className="text-[10px] text-arena-primary font-semibold">
+              Ver ranking →
+            </Link>
+          )}
+        </div>
+      )}
 
       {/* ── LOGO HERO — only in mobile mode (sidebar already shows logo in desktop) ── */}
       {viewMode === "mobile" && (
