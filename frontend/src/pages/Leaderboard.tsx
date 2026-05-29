@@ -170,7 +170,7 @@ function PlayerRow({
             />
           )}
           <span className="text-sm font-bold text-white truncate">{player.username}</span>
-          {isMe && <span className="text-[10px] text-arena-primary font-semibold">(você)</span>}
+          {isMe && <span className="text-[10px] text-arena-primary font-semibold">(you)</span>}
           {player.xHandle && (
             <a
               href={`https://twitter.com/${player.xHandle}`}
@@ -245,7 +245,7 @@ function SeasonBanner() {
         </div>
         <div className="rounded-xl bg-arena-bg/60 border border-arena-border px-3 py-2 text-center">
           <p className="text-[9px] text-arena-muted uppercase tracking-wider mb-1">
-            💰 Próximo Prêmio
+            💰 Next Reward
           </p>
           <p className="font-display text-arena-success text-sm tabular-nums">
             {formatCountdown(rewardMs)}
@@ -255,7 +255,7 @@ function SeasonBanner() {
       </div>
 
       <p className="text-[10px] text-arena-muted text-center mt-3">
-        Top 10 dividem o yield Aave todo dia 30 · proporcionalmente aos pontos
+        Top 10 share Aave yield every 30th · proportional to points
       </p>
     </div>
   );
@@ -309,7 +309,7 @@ export default function Leaderboard() {
         <BahiaArenaLogo size={44} showWordmark={false} />
         <div>
           <h1 className="font-display text-arena-primary text-sm tracking-widest">LEADERBOARD</h1>
-          <p className="text-[10px] text-arena-muted">Top 10 · Pool Mensal · Celo</p>
+          <p className="text-[10px] text-arena-muted">Top 10 · Monthly Pool · Celo</p>
         </div>
       </div>
 
@@ -319,14 +319,14 @@ export default function Leaderboard() {
       {/* ── My Stats ───────────────────────────────────────────────────── */}
       {hasProfile && profile ? (
         <div className="rounded-2xl bg-arena-surface border border-arena-primary/20 p-4 mb-4">
-          <p className="text-[10px] text-arena-muted uppercase tracking-wider mb-2">Sua Posição</p>
+          <p className="text-[10px] text-arena-muted uppercase tracking-wider mb-2">Your Position</p>
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
               <p className="text-sm font-bold text-white">{profile.username}</p>
               <p className="text-[10px] text-arena-muted mt-0.5">
                 Rank:{" "}
                 <span className={`font-bold ${myRank > 0 ? "text-arena-primary" : "text-arena-muted"}`}>
-                  {myRank > 0 ? `#${myRank}` : "Não classificado"}
+                  {myRank > 0 ? `#${myRank}` : "Unranked"}
                 </span>
               </p>
             </div>
@@ -349,32 +349,32 @@ export default function Leaderboard() {
               <p className="text-sm font-bold text-arena-success">
                 ~{estimatedReward(profile.points)} USDT
               </p>
-              <p className="text-[10px] text-arena-muted">prêmio est.</p>
+              <p className="text-[10px] text-arena-muted">est. reward</p>
             </div>
           </div>
         </div>
       ) : needsSetup ? (
         <div className="rounded-2xl bg-arena-surface border border-arena-border p-4 mb-4 text-center">
           <p className="text-xs text-arena-muted mb-2">
-            Crie um perfil para aparecer no ranking
+            Create a profile to appear on the ranking
           </p>
           <Link
             to="/play"
             className="inline-block px-4 py-2 rounded-xl bg-arena-primary text-arena-bg text-xs font-bold active:scale-95 transition-transform"
           >
-            🎮 Jogar e Criar Perfil
+            🎮 Play & Create Profile
           </Link>
         </div>
       ) : !address ? (
         <div className="rounded-2xl bg-arena-surface border border-arena-border p-4 mb-4 text-center">
           <p className="text-xs text-arena-muted mb-2">
-            Conecte sua carteira para rastrear seu ranking
+            Connect your wallet to track your ranking
           </p>
           <Link
             to="/"
             className="inline-block px-4 py-2 rounded-xl bg-arena-primary text-arena-bg text-xs font-bold active:scale-95 transition-transform"
           >
-            Conectar Carteira
+            Connect Wallet
           </Link>
         </div>
       ) : null}
@@ -390,12 +390,12 @@ export default function Leaderboard() {
       {leaderboard.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 gap-3">
           <span className="text-5xl">🏆</span>
-          <p className="text-arena-muted text-sm">Seja o primeiro no ranking!</p>
+          <p className="text-arena-muted text-sm">Be the first on the leaderboard!</p>
           <Link
             to="/play"
             className="px-5 py-2.5 rounded-xl bg-arena-primary text-arena-bg font-semibold text-sm active:scale-95 transition-transform"
           >
-            🎮 Batalhar agora
+            🎮 Battle now
           </Link>
         </div>
       ) : (
@@ -414,27 +414,27 @@ export default function Leaderboard() {
 
       {/* ── Footer explainer ───────────────────────────────────────────── */}
       <div className="mt-6 p-4 rounded-2xl bg-arena-surface border border-arena-border">
-        <p className="text-xs font-semibold mb-3">💡 Como ganhar mais pontos</p>
+        <p className="text-xs font-semibold mb-3">💡 How to earn more points</p>
         <div className="space-y-2 text-xs text-arena-muted">
           <p>
-            • Jogue em{" "}
+            • Play in{" "}
             <Link to="/play" className="text-arena-primary font-semibold">Demo</Link>
-            {" "}— qualquer dificuldade conta para o ranking.
+            {" "}— any difficulty counts toward the ranking.
           </p>
           <p>
-            • <span className="text-arena-primary">⭐ Legendary</span> = {DIFF_PTS.legendary.win} pts/vitória ·{" "}
+            • <span className="text-arena-primary">⭐ Legendary</span> = {DIFF_PTS.legendary.win} pts/win ·{" "}
             <span className="text-red-400">🔴 Hard</span> = {DIFF_PTS.hard.win} pts ·{" "}
             <span className="text-amber-300">🟡 Medium</span> = {DIFF_PTS.medium.win} pts ·{" "}
             <span className="text-emerald-400">🟢 Easy</span> = {DIFF_PTS.easy.win} pts
           </p>
           <p>
-            • Sequências de vitórias (3×, 5×, 10×) multiplicam seus pontos — especialmente em Legendary.
+            • Win streaks (3×, 5×, 10×) multiply your points — especially on Legendary.
           </p>
           <p>
-            • Derrotas ainda rendem pontos — nunca pare de jogar!
+            • Losses still earn points — never stop playing!
           </p>
           <p>
-            • Top 10 dividem 50% do yield Aave todo dia 30, proporcional aos pontos.
+            • Top 10 share 50% of Aave yield every 30th, proportional to points.
           </p>
           <p className="text-arena-primary font-semibold">
             🏆 Temporada MVP encerra em{" "}

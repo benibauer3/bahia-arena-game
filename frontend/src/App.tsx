@@ -14,7 +14,7 @@ import Arena                                          from "@/pages/Arena";
 import Roster                                         from "@/pages/Roster";
 import Battle                                         from "@/pages/Battle";
 import Leaderboard                                    from "@/pages/Leaderboard";
-import Demo                                           from "@/pages/Demo";
+import Demo, { RankedPage }                           from "@/pages/Demo";
 import PulseRewards                                   from "@/pages/PulseRewards";
 import Profile                                        from "@/pages/Profile";
 
@@ -90,7 +90,7 @@ function BottomNav() {
   const tabs = [
     { to: "/",            icon: "🏠", label: "Home"    },
     { to: "/play",        icon: "⚔️",  label: "Play"    },
-    { to: "/arena",       icon: "🌐", label: "Arena"   },
+    { to: "/ranked",      icon: "🥊", label: "Ranked"  },
     { to: "/leaderboard", icon: "🏆", label: "Ranking" },
     { to: "/profile",     icon: "👤", label: "Profile" },
   ];
@@ -99,7 +99,7 @@ function BottomNav() {
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-arena-surface/95 backdrop-blur-sm border-t border-arena-border safe-area-inset-bottom">
       <div className="grid grid-cols-5 max-w-md mx-auto">
         {tabs.map((tab) => {
-          const isDemo   = tab.to === "/play";
+          const isDemo   = tab.to === "/play" || tab.to === "/ranked";
           const isActive = path === tab.to;
           return (
             <a
@@ -137,7 +137,8 @@ function SidebarNav() {
 
   const items = [
     { to: "/",            icon: "🏠", label: "Home"      },
-    { to: "/play",        icon: "⚔️",  label: "Play"      },
+    { to: "/play",        icon: "⚔️",  label: "Play Free" },
+    { to: "/ranked",      icon: "🥊", label: "Ranked"    },
     { to: "/arena",       icon: "🌐", label: "Arena"     },
     { to: "/leaderboard", icon: "🏆", label: "Ranking"   },
     { to: "/roster",      icon: "🐉",  label: "Champions" },
@@ -162,7 +163,7 @@ function SidebarNav() {
         {items.map(item => {
           const isActive = path === item.to;
           const isPulse  = item.to === "/pulse";
-          const isDemo   = item.to === "/play";
+          const isDemo   = item.to === "/play" || item.to === "/ranked";
           return (
             <Link
               key={item.to}
@@ -273,6 +274,7 @@ export default function App() {
         <Route path="/leaderboard" element={<Leaderboard />}  />
         <Route path="/roster"      element={<Roster />}       />
         <Route path="/play"        element={<Demo />}         />
+        <Route path="/ranked"      element={<RankedPage />}   />
         <Route path="/pulse"       element={<PulseRewards />} />
         <Route path="/profile"     element={<Profile />}      />
       </Routes>

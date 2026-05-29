@@ -187,22 +187,22 @@ const DIFFICULTIES: {
 }[] = [
   {
     id: "easy",   label: "Easy",      emoji: "🟢",
-    desc:  "IA joga 1 carta · sem ultimate",
+    desc:  "AI plays 1 card · no ultimate",
     color: "border-emerald-500 bg-emerald-500/10 text-emerald-400",
   },
   {
     id: "medium", label: "Medium",    emoji: "🟡",
-    desc:  "IA joga 2 cartas · usa ultimate",
+    desc:  "AI plays 2 cards · uses ultimate",
     color: "border-amber-400  bg-amber-400/10  text-amber-300",
   },
   {
     id: "hard",   label: "Hard",      emoji: "🔴",
-    desc:  "IA tática · ultimate agressivo",
+    desc:  "Tactical AI · aggressive ultimate",
     color: "border-red-500   bg-red-500/10   text-red-400",
   },
   {
     id: "legendary", label: "Legendary", emoji: "⭐",
-    desc:  "IA perfeita · sem misericórdia",
+    desc:  "Perfect AI · no mercy",
     color: "border-arena-primary bg-arena-primary/10 text-arena-primary",
   },
 ];
@@ -264,8 +264,8 @@ function SetupScreen({
         {/* Difficulty */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-semibold text-white uppercase tracking-wider">⚙️ Dificuldade</p>
-            <p className="text-[10px] text-arena-muted">Mais difícil = mais pontos</p>
+            <p className="text-xs font-semibold text-white uppercase tracking-wider">⚙️ Difficulty</p>
+            <p className="text-[10px] text-arena-muted">Harder = more points</p>
           </div>
           <div className="space-y-2">
             {DIFFICULTIES.map(d => {
@@ -349,13 +349,14 @@ function SetupScreen({
 // ─────────────────────────────────────────────────────────────────────────────
 
 function BattleScreen({
-  myClass, opponentClass, difficulty, arena, onReset,
+  myClass, opponentClass, difficulty, arena, onReset, trialMode,
 }: {
   myClass:       ChampionClass;
   opponentClass: ChampionClass;
   difficulty:    Difficulty;
   arena:         ArenaTheme;
   onReset:       () => void;
+  trialMode?:    boolean;
 }) {
   const logRef       = useRef<HTMLDivElement>(null);
   const champA       = CHAMPIONS[myClass];
@@ -590,6 +591,7 @@ function BattleScreen({
 
   useEffect(() => {
     if (phase !== "result" || matchRecordedRef.current) return;
+    if (trialMode) return; // Free trial — no local stats recorded
     matchRecordedRef.current = true;
     const outcome = winner === "A" ? "win" : winner === "B" ? "loss" : "draw";
     const res = addMatchResult(outcome, champA.name, champB.name, arena, difficulty);
@@ -599,6 +601,7 @@ function BattleScreen({
   // ── On-chain recording: recordBattle → fallback dailyCheckIn ────────────────
   useEffect(() => {
     if (phase !== "result" || chainRecordedRef.current || !playerAddr) return;
+    if (trialMode) return; // Free trial — no on-chain recording
     chainRecordedRef.current = true;
     setChainStatus("recording");
 
@@ -1066,8 +1069,26 @@ function BattleScreen({
       {phase==="result" && showResultCTAs && (
         <div className="shrink-0 px-3 pt-2 pb-5 flex flex-col gap-2 animate-pop-in">
 
-          {/* Points earned banner */}
-          {matchPoints !== null && (
+          {/* Trial mode: join ranked CTA instead of points */}
+          {trialMode && (
+            <div className="px-4 py-3 rounded-xl bg-arena-primary/10 border border-arena-primary/30">
+              <p className="text-arena-primary font-bold text-sm mb-0.5">
+                {winner === "A" ? "🏆 Nice win!" : winner === "B" ? "💀 Keep training!" : "🤝 Close match!"}
+              </p>
+              <p className="text-arena-muted text-xs">
+                Join Ranked to save your progress, earn points, and compete for monthly rewards.
+              </p>
+              <Link
+                to="/ranked"
+                className="mt-2.5 flex items-center justify-center gap-1.5 w-full py-2.5 rounded-xl bg-arena-primary text-arena-bg text-xs font-bold active:scale-95 transition-transform"
+              >
+                ⚔️ Join Ranked (deposit 1 USDT)
+              </Link>
+            </div>
+          )}
+
+          {/* Points earned banner (ranked mode only) */}
+          {!trialMode && matchPoints !== null && (
             <div className={`flex items-center justify-between px-4 py-2.5 rounded-xl border ${
               winner === "A"
                 ? "bg-arena-primary/10 border-arena-primary/30"
@@ -1085,29 +1106,29 @@ function BattleScreen({
                 </span>
                 <p className="text-[10px] text-arena-muted mt-0.5">
                   {DIFF_PTS[difficulty].win === matchPoints && winner === "A"
-                    ? `Vitória ${difficulty} sem bônus`
+                    ? `${difficulty} win — no bonus`
                     : winner === "A" && matchPoints > DIFF_PTS[difficulty].win
-                      ? `+${matchPoints - DIFF_PTS[difficulty].win} pts de streak!`
-                      : "Pontos adicionados"}
+                      ? `+${matchPoints - DIFF_PTS[difficulty].win} streak pts!`
+                      : "Points added"}
                 </p>
               </div>
               <Link
                 to="/leaderboard"
                 className="text-[10px] text-arena-primary font-semibold underline underline-offset-2 shrink-0"
               >
-                Ver ranking →
+                View ranking →
               </Link>
             </div>
           )}
 
-          {/* On-chain recording status */}
-          {chainStatus === "recording" && (
+          {/* On-chain recording status (ranked mode only) */}
+          {!trialMode && chainStatus === "recording" && (
             <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-arena-info/10 border border-arena-info/20">
               <div className="w-3.5 h-3.5 border-2 border-arena-info border-t-transparent rounded-full animate-spin shrink-0" />
-              <span className="text-arena-info text-xs font-medium">Registrando na Celo…</span>
+              <span className="text-arena-info text-xs font-medium">Recording on Celo…</span>
             </div>
           )}
-          {chainStatus === "success" && chainTxHash && (
+          {!trialMode && chainStatus === "success" && chainTxHash && (
             <a
               href={`https://celoscan.io/tx/${chainTxHash}`}
               target="_blank" rel="noopener noreferrer"
@@ -1116,11 +1137,11 @@ function BattleScreen({
               <div className="flex items-center gap-2">
                 <span className="text-arena-success text-base">⛓️</span>
                 <div>
-                  <p className="text-arena-success text-xs font-semibold">Registrado na Celo</p>
+                  <p className="text-arena-success text-xs font-semibold">Recorded on Celo</p>
                   <p className="text-arena-muted text-[9px]">{chainTxHash.slice(0,10)}…{chainTxHash.slice(-6)}</p>
                 </div>
               </div>
-              <span className="text-arena-muted text-[10px]">Ver →</span>
+              <span className="text-arena-muted text-[10px]">View →</span>
             </a>
           )}
 
@@ -1130,9 +1151,11 @@ function BattleScreen({
               onClick={() => {
                 const profile = playerProfile;
                 const diffLabel = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
-                const text = profile
-                  ? `🏆 Venci no nível ${diffLabel} com ${champA.name} na @BahiaArena! +${matchPoints ?? DIFF_PTS[difficulty].win} pts${profile.streak > 1 ? ` 🔥 ${profile.streak}x streak` : ""} #BahiaArena #Celo`
-                  : `🏆 Bati a IA no nível ${diffLabel} com ${champA.name} na @BahiaArena! #BahiaArena #Web3Gaming #Celo`;
+                const text = trialMode
+                  ? `🏆 I beat the AI at level ${diffLabel} with ${champA.name} on @BahiaArena! Try for free → bahia-arena.vercel.app #BahiaArena #Celo`
+                  : profile
+                    ? `🏆 I won at level ${diffLabel} with ${champA.name} on @BahiaArena! +${matchPoints ?? DIFF_PTS[difficulty].win} pts${profile.streak > 1 ? ` 🔥 ${profile.streak}x streak` : ""} #BahiaArena #Celo`
+                    : `🏆 I beat the AI at level ${diffLabel} with ${champA.name} on @BahiaArena! #BahiaArena #Web3Gaming #Celo`;
                 window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
               }}
               className="w-full py-2.5 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 active:scale-95 transition-transform"
@@ -1141,26 +1164,28 @@ function BattleScreen({
               <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white">
                 <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.261 5.632 5.903-5.632zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
               </svg>
-              Compartilhar vitória
+              Share victory
             </button>
           )}
 
-          {!isConnected && (
+          {!trialMode && !isConnected && (
             <p className="text-center text-[10px] text-arena-muted px-2">
-              Conecte sua carteira para salvar pontos no ranking permanentemente
+              Connect your wallet to save points to the permanent ranking
             </p>
           )}
 
           <button onClick={onReset}
             className="w-full py-3 rounded-xl text-sm font-semibold text-white active:scale-95 transition-transform"
             style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)"}}>
-            🔄 Jogar Novamente
+            🔄 Play Again
           </button>
 
-          <Link to="/leaderboard"
-            className="block w-full py-3 rounded-xl font-bold text-sm text-center active:scale-95 transition-transform border border-arena-primary/40 text-arena-primary">
-            🏆 Ver Ranking
-          </Link>
+          {!trialMode && (
+            <Link to="/leaderboard"
+              className="block w-full py-3 rounded-xl font-bold text-sm text-center active:scale-95 transition-transform border border-arena-primary/40 text-arena-primary">
+              🏆 View Ranking
+            </Link>
+          )}
         </div>
       )}
     </div>
@@ -1248,8 +1273,8 @@ function PlayGate({ children }: { children: React.ReactNode }) {
         </div>
 
         <div>
-          <h1 className="text-white text-xl font-bold mb-1">Pronto para batalhar?</h1>
-          <p className="text-arena-muted text-sm">Conecte sua wallet para entrar na arena</p>
+          <h1 className="text-white text-xl font-bold mb-1">Ready to battle?</h1>
+          <p className="text-arena-muted text-sm">Connect your wallet to enter the arena</p>
         </div>
 
         <button
@@ -1258,16 +1283,16 @@ function PlayGate({ children }: { children: React.ReactNode }) {
           className="w-full max-w-xs py-4 rounded-2xl bg-arena-primary text-arena-bg font-bold text-base disabled:opacity-60 active:scale-95 transition-transform"
           style={{ boxShadow: "0 4px 20px rgba(246,201,14,0.35)" }}
         >
-          {connecting ? "Conectando…" : "🔗 Conectar Wallet"}
+          {connecting ? "Connecting…" : "🔗 Connect Wallet"}
         </button>
 
         {/* Benefits list */}
         <div className="w-full max-w-xs space-y-2.5 text-left">
           {[
-            { icon: "🏦", text: "1 USDT rende yield automático na Aave V3" },
-            { icon: "🏆", text: "Dispute o ranking mensal e ganhe recompensas" },
-            { icon: "⚔️", text: "PvP ilimitado, sem custo por partida" },
-            { icon: "🔓", text: "Saque o principal a qualquer momento" },
+            { icon: "🏦", text: "1 USDT earns automatic yield on Aave V3" },
+            { icon: "🏆", text: "Compete in the monthly ranking & earn rewards" },
+            { icon: "⚔️", text: "Unlimited PvP, no cost per match" },
+            { icon: "🔓", text: "Withdraw your principal anytime" },
           ].map(b => (
             <div key={b.text} className="flex items-start gap-3 p-3 rounded-xl bg-arena-surface border border-arena-border">
               <span className="text-lg shrink-0">{b.icon}</span>
@@ -1284,7 +1309,7 @@ function PlayGate({ children }: { children: React.ReactNode }) {
     return (
       <div className="min-h-screen bg-arena-bg flex items-center justify-center gap-3">
         <div className="w-6 h-6 border-2 border-arena-primary border-t-transparent rounded-full animate-spin" />
-        <span className="text-arena-muted text-sm">Verificando depósito…</span>
+        <span className="text-arena-muted text-sm">Checking deposit…</span>
       </div>
     );
   }
@@ -1301,9 +1326,9 @@ function PlayGate({ children }: { children: React.ReactNode }) {
         </div>
 
         <div>
-          <h1 className="text-white text-xl font-bold mb-1">Deposite 1 USDT</h1>
+          <h1 className="text-white text-xl font-bold mb-1">Deposit 1 USDT</h1>
           <p className="text-arena-muted text-sm">
-            Seu depósito fica na Aave V3 rendendo yield enquanto você joga
+            Your deposit earns yield on Aave V3 while you play
           </p>
         </div>
 
@@ -1311,12 +1336,12 @@ function PlayGate({ children }: { children: React.ReactNode }) {
         <div className="w-full max-w-xs flex items-center gap-2 text-xs">
           <div className={`flex-1 flex items-center gap-1.5 p-2 rounded-xl border ${!needsApproval ? "border-arena-success/40 bg-arena-success/5 text-arena-success" : "border-arena-border bg-arena-surface text-arena-muted"}`}>
             <span>{!needsApproval ? "✅" : "1️⃣"}</span>
-            <span>Aprovar USDT</span>
+            <span>Approve USDT</span>
           </div>
           <span className="text-arena-border">→</span>
           <div className="flex-1 flex items-center gap-1.5 p-2 rounded-xl border border-arena-border bg-arena-surface text-arena-muted">
             <span>2️⃣</span>
-            <span>Depositar</span>
+            <span>Deposit</span>
           </div>
         </div>
 
@@ -1327,12 +1352,12 @@ function PlayGate({ children }: { children: React.ReactNode }) {
           style={{ boxShadow: "0 4px 20px rgba(246,201,14,0.35)" }}
         >
           {approving
-            ? "⏳ Aprovando USDT…"
+            ? "⏳ Approving USDT…"
             : depositing
-            ? "⏳ Depositando…"
+            ? "⏳ Depositing…"
             : needsApproval
-            ? "💰 Aprovar + Depositar 1 USDT"
-            : "💰 Depositar 1 USDT"}
+            ? "💰 Approve + Deposit 1 USDT"
+            : "💰 Deposit 1 USDT"}
         </button>
 
         {depositErr && (
@@ -1342,9 +1367,9 @@ function PlayGate({ children }: { children: React.ReactNode }) {
         {/* Benefits */}
         <div className="w-full max-w-xs space-y-2 text-left">
           {[
-            { icon: "📈", text: "Yield automático — seu 1 USDT cresce enquanto você joga" },
-            { icon: "🏆", text: "Top 10 do ranking recebe parte do yield todo dia 30" },
-            { icon: "🔓", text: "Saque o principal a qualquer momento" },
+            { icon: "📈", text: "Auto yield — your 1 USDT grows while you play" },
+            { icon: "🏆", text: "Top 10 ranking players share yield every 30th" },
+            { icon: "🔓", text: "Withdraw your principal anytime" },
           ].map(b => (
             <div key={b.text} className="flex items-start gap-3 p-3 rounded-xl bg-arena-surface border border-arena-border">
               <span className="text-lg shrink-0">{b.icon}</span>
@@ -1366,7 +1391,7 @@ function PlayGate({ children }: { children: React.ReactNode }) {
 
 type Stage = "pick" | "setup" | "battle";
 
-export default function DemoPage() {
+function ArenaPage({ trialMode = false }: { trialMode?: boolean }) {
   const [stage,         setStage]         = useState<Stage>("pick");
   const [myClass,       setMyClass]       = useState<ChampionClass | null>(null);
   const [opponentClass, setOpponentClass] = useState<ChampionClass | null>(null);
@@ -1403,8 +1428,24 @@ export default function DemoPage() {
         difficulty={config.difficulty}
         arena={config.arena}
         onReset={handleReset}
+        trialMode={trialMode}
       />
     ) : null;
 
+  if (trialMode) {
+    // Free trial — no gate, anyone can play
+    return <>{inner}</>;
+  }
+
   return <PlayGate>{inner}</PlayGate>;
+}
+
+// /play  — free trial, no wallet required
+export default function DemoPage() {
+  return <ArenaPage trialMode={true} />;
+}
+
+// /ranked — full ranked mode, wallet + deposit required
+export function RankedPage() {
+  return <ArenaPage trialMode={false} />;
 }

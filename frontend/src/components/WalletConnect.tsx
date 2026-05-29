@@ -5,7 +5,7 @@
  *
  * Detecção:
  *  • Checa window.ethereum.providers[] (multi-wallet) e window.ethereum diretamente.
- *  • Se a extensão não está instalada, mostra botão "Instalar →".
+ *  • Se a extensão não está instalada, mostra botão "Install →".
  *  • Se está no Opera MiniPay, exibe apenas MiniPay.
  */
 
@@ -44,7 +44,7 @@ const WALLETS: WalletDef[] = [
   {
     id:          "metaMask",
     name:        "MetaMask",
-    description: "A extensão mais usada no mundo",
+    description: "Most used wallet worldwide",
     icon:        "🦊",
     connector:   WALLET_CONNECTORS.metaMask,
     installUrl:  "https://metamask.io/download",
@@ -53,7 +53,7 @@ const WALLETS: WalletDef[] = [
   {
     id:          "uniswap",
     name:        "Uniswap Wallet",
-    description: "Extensão oficial da Uniswap",
+    description: "Official Uniswap extension",
     icon:        "🦄",
     connector:   WALLET_CONNECTORS.uniswap,
     installUrl:  "https://wallet.uniswap.org",
@@ -62,7 +62,7 @@ const WALLETS: WalletDef[] = [
   {
     id:          "rabby",
     name:        "Rabby Wallet",
-    description: "Segurança avançada, multi-chain",
+    description: "Advanced security, multi-chain",
     icon:        "🐰",
     connector:   WALLET_CONNECTORS.rabby,
     installUrl:  "https://rabby.io",
@@ -71,18 +71,18 @@ const WALLETS: WalletDef[] = [
   {
     id:          "coinbase",
     name:        "Coinbase Wallet",
-    description: "Smart wallet da Coinbase",
+    description: "Coinbase smart wallet",
     icon:        "🟦",
     connector:   WALLET_CONNECTORS.coinbase,
     installUrl:  "https://www.coinbase.com/wallet/downloads",
-    detect:      () => true, // Coinbase SDK funciona sem extensão (smart wallet)
+    detect:      () => true, // Coinbase SDK works without extension (smart wallet)
   },
 ];
 
 const MINIPAY_DEF: WalletDef = {
   id:          "miniPay",
   name:        "MiniPay",
-  description: "Opera MiniPay — conecte sua carteira",
+  description: "Opera MiniPay — connect your wallet",
   icon:        "📱",
   connector:   WALLET_CONNECTORS.miniPay,
   installUrl:  "https://www.opera.com/pt/crypto/minipay",
@@ -120,9 +120,9 @@ function WalletModal({ onClose }: { onClose: () => void }) {
         {/* Handle */}
         <div className="w-10 h-1 bg-arena-border rounded-full mx-auto mb-5" />
 
-        <h2 className="text-base font-bold mb-0.5">Conectar Carteira</h2>
+        <h2 className="text-base font-bold mb-0.5">Connect Wallet</h2>
         <p className="text-xs text-arena-muted mb-5">
-          Escolha a extensão instalada no seu navegador
+          Choose the wallet installed in your browser
         </p>
 
         <div className="flex flex-col gap-2">
@@ -151,7 +151,7 @@ function WalletModal({ onClose }: { onClose: () => void }) {
                   >
                     {isLoading ? (
                       <span className="w-3.5 h-3.5 rounded-full border-2 border-arena-bg border-t-transparent animate-spin" />
-                    ) : "Conectar"}
+                    ) : "Connect"}
                   </button>
                 ) : (
                   <a
@@ -160,7 +160,7 @@ function WalletModal({ onClose }: { onClose: () => void }) {
                     rel="noreferrer"
                     className="shrink-0 px-3 py-2 rounded-xl border border-arena-border text-arena-muted text-xs font-semibold hover:text-white hover:border-white/30 transition-colors"
                   >
-                    Instalar →
+                    Install →
                   </a>
                 )}
               </div>
@@ -171,16 +171,16 @@ function WalletModal({ onClose }: { onClose: () => void }) {
         {/* Erro */}
         {error && (
           <p className="mt-3 text-xs text-arena-danger text-center px-2">
-            {error.message.includes("rejected") ? "Conexão cancelada pelo usuário." : error.message}
+            {error.message.includes("rejected") ? "Connection rejected by user." : error.message}
           </p>
         )}
 
         {/* Footer */}
         <p className="mt-5 text-center text-[11px] text-arena-muted">
-          Novo na Web3?{" "}
+          New to Web3?{" "}
           <a href="https://metamask.io/download" target="_blank" rel="noreferrer"
             className="text-arena-primary underline">
-            Instale o MetaMask →
+            Install MetaMask →
           </a>
         </p>
       </div>
@@ -220,7 +220,7 @@ export default function WalletConnect() {
           onClick={() => setShowModal(true)}
           className="w-full px-5 py-3.5 rounded-xl font-semibold text-sm bg-arena-primary text-arena-bg active:scale-95 transition-transform shadow-lg shadow-arena-primary/20"
         >
-          {isMiniPay ? "📱 Conectar MiniPay" : "🔗 Conectar Carteira"}
+          {isMiniPay ? "📱 Connect MiniPay" : "🔗 Connect Wallet"}
         </button>
         {showModal && <WalletModal onClose={() => setShowModal(false)} />}
       </>

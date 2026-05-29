@@ -38,10 +38,10 @@ export default function DepositGateSheet({ onClose }: Props) {
 
         {/* Title */}
         <h2 className="text-center text-lg font-bold text-white mb-1">
-          Depósito necessário
+          Deposit required
         </h2>
         <p className="text-center text-xs text-arena-muted mb-6">
-          Deposite 1 USDT para entrar na arena — rende yield automático
+          Deposit 1 USDT to enter the arena — earns automatic yield
         </p>
 
         {/* Benefits */}
@@ -49,23 +49,23 @@ export default function DepositGateSheet({ onClose }: Props) {
           {[
             {
               icon: "🏦",
-              title: "Rende yield automático",
-              desc: "Seu 1 USDT vai direto para a Aave V3 e fica rendendo enquanto você joga",
+              title: "Earns automatic yield",
+              desc: "Your 1 USDT goes straight to Aave V3 and earns yield while you play",
             },
             {
               icon: "🏆",
-              title: "Compita no ranking mensal",
-              desc: "Top 10 recebe parte do yield acumulado todo dia 30, direto na sua wallet",
+              title: "Compete in the monthly ranking",
+              desc: "Top 10 players share the accumulated yield every 30th, sent to your wallet",
             },
             {
               icon: "⚔️",
-              title: "PvP ilimitado",
-              desc: "Jogue quantas batalhas quiser — sem custo por partida",
+              title: "Unlimited PvP",
+              desc: "Play as many battles as you want — no cost per match",
             },
             {
               icon: "🔓",
-              title: "Saque quando quiser",
-              desc: "Seu principal (1 USDT) pode ser retirado a qualquer momento",
+              title: "Withdraw anytime",
+              desc: "Your principal (1 USDT) can be withdrawn anytime",
             },
           ].map(item => (
             <div
@@ -88,11 +88,11 @@ export default function DepositGateSheet({ onClose }: Props) {
           className="block w-full py-4 rounded-2xl bg-arena-primary text-arena-bg font-bold text-center text-base active:scale-95 transition-transform"
           style={{ boxShadow: "0 4px 20px rgba(246,201,14,0.30)" }}
         >
-          ⚔️ Depositar e Jogar
+          ⚔️ Deposit & Play
         </Link>
 
         <p className="text-center text-xs text-arena-muted mt-4">
-          Seu principal (1 USDT) pode ser retirado a qualquer momento
+          Your principal (1 USDT) can be withdrawn anytime
         </p>
       </div>
     </div>

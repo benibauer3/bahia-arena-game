@@ -107,12 +107,12 @@ export default function Home() {
           <div className="flex items-center gap-3">
             <div className="text-center">
               <p className="text-arena-primary font-bold text-base tabular-nums leading-none">{wins}</p>
-              <p className="text-[9px] text-arena-muted mt-0.5">vitórias</p>
+              <p className="text-[9px] text-arena-muted mt-0.5">wins</p>
             </div>
             <div className="w-px h-6 bg-arena-border" />
             <div className="text-center">
               <p className="text-white font-bold text-base tabular-nums leading-none">{totalPts}</p>
-              <p className="text-[9px] text-arena-muted mt-0.5">pontos</p>
+              <p className="text-[9px] text-arena-muted mt-0.5">points</p>
             </div>
           </div>
           {streak >= 2 && (
@@ -123,7 +123,7 @@ export default function Home() {
           )}
           {streak < 2 && (
             <Link to="/leaderboard" className="text-[10px] text-arena-primary font-semibold">
-              Ver ranking →
+              View ranking →
             </Link>
           )}
         </div>
@@ -137,7 +137,8 @@ export default function Home() {
       )}
 
       {/* ── BATTLE ──────────────────────────────────────────────────────────── */}
-      <div className="px-4 mb-5">
+      <div className="px-4 mb-5 flex flex-col gap-2.5">
+        {/* Primary CTA — Play Free (no wallet) */}
         <Link
           to="/play"
           className="block w-full rounded-2xl overflow-hidden active:scale-[0.98] transition-transform"
@@ -147,16 +148,15 @@ export default function Home() {
           }}
         >
           <div className="relative px-5 py-5">
-            {/* Texto principal */}
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-arena-bg font-bold text-xl leading-tight">⚔️ BATTLE</p>
-                <p className="text-arena-bg/70 text-xs mt-0.5 font-medium">Escolha seu campeão e batalhe</p>
+                <p className="text-arena-bg font-bold text-xl leading-tight">⚔️ PLAY FREE</p>
+                <p className="text-arena-bg/70 text-xs mt-0.5 font-medium">No wallet needed · Choose your champion</p>
               </div>
               <div className="text-4xl animate-float">⚔️</div>
             </div>
 
-            {/* Mini prévia dos 5 campeões */}
+            {/* Mini champion preview */}
             <div className="flex items-center gap-1.5 mt-3">
               {CHAMPIONS.map(c => (
                 <div
@@ -169,6 +169,18 @@ export default function Home() {
             </div>
             <p className="text-arena-bg/60 text-[10px] mt-2 text-center">5 champions · 4 cards each · AI opponent</p>
           </div>
+        </Link>
+
+        {/* Secondary CTA — Ranked mode */}
+        <Link
+          to="/ranked"
+          className="flex items-center justify-between px-5 py-3.5 rounded-2xl border border-arena-primary/40 bg-arena-surface active:scale-[0.98] transition-transform"
+        >
+          <div>
+            <p className="text-arena-primary font-bold text-sm leading-tight">🥊 Ranked Mode</p>
+            <p className="text-arena-muted text-xs mt-0.5">Deposit 1 USDT · Earn points · Monthly rewards</p>
+          </div>
+          <span className="text-arena-primary text-lg">→</span>
         </Link>
       </div>
 
@@ -245,10 +257,10 @@ export default function Home() {
         <p className="text-xs font-semibold text-white uppercase tracking-wider mb-3">How It Works</p>
         <div className="space-y-2">
           {[
-            { n:"1", emoji:"⚔️",  title:"Escolha seu Campeão",  desc:"5 campeões da mitologia brasileira, cada um com poderes únicos.", color:"bg-yellow-500" },
-            { n:"2", emoji:"💰", title:"Deposit 1 USDT",       desc:"Deposited into Aave V3 to generate yield automatically.", color:"bg-green-500"  },
-            { n:"3", emoji:"🃏", title:"Card Battles",         desc:"3 basic + 1 ultimate per champion. Up to 2 cards per turn.", color:"bg-blue-500" },
-            { n:"4", emoji:"🏆", title:"Monthly Ranking",      desc:"Top 10 share 60% of yield. Withdraw anytime.",            color:"bg-purple-500" },
+            { n:"1", emoji:"⚔️",  title:"Choose Your Champion",  desc:"5 champions from Brazilian mythology, each with unique powers.", color:"bg-yellow-500" },
+            { n:"2", emoji:"💰", title:"Deposit 1 USDT",       desc:"Your deposit earns yield on Aave V3 automatically.", color:"bg-green-500"  },
+            { n:"3", emoji:"🃏", title:"Card Battles",         desc:"3 basic + 1 ultimate per champion. Play up to 2 cards per turn.", color:"bg-blue-500" },
+            { n:"4", emoji:"🏆", title:"Monthly Ranking",      desc:"Top 10 players share yield every month. Withdraw anytime.",            color:"bg-purple-500" },
           ].map(s => (
             <div key={s.n} className="flex items-start gap-3 p-3 rounded-xl bg-arena-surface border border-arena-border">
               <div className={`w-7 h-7 rounded-lg ${s.color} flex items-center justify-center shrink-0`}>
@@ -262,12 +274,12 @@ export default function Home() {
           ))}
         </div>
 
-        {/* CTA final de demo — redundância intencional */}
+        {/* Final CTA */}
         <Link to="/play"
           className="mt-4 flex items-center justify-center gap-2 w-full py-4 rounded-2xl bg-arena-primary text-arena-bg font-bold text-base active:scale-95 transition-transform"
           style={{ boxShadow: "0 4px 20px rgba(246,201,14,0.3)" }}
         >
-          ⚔️ ENTRAR NA ARENA
+          ⚔️ PLAY FREE NOW
         </Link>
       </div>
     </div>
