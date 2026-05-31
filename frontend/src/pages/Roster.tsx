@@ -64,7 +64,7 @@ function DepositWidgetInner() {
   const { data: entryFee } = useReadContract({
     address: ACTIVE_CONTRACTS.ArenaManager,
     abi: ARENA_ABI,
-    functionName: "TIER4_AMOUNT", // v6: max tier = 1 USDT (was ENTRY_FEE in v5)
+    functionName: "ENTRY_FEE",
   });
 
   const { data: usdtBalance } = useReadContract({
@@ -114,7 +114,7 @@ function DepositWidgetInner() {
         address:  ACTIVE_CONTRACTS.ArenaManager,
         abi:      ARENA_ABI,
         functionName: "deposit",
-        args:     [fee], // v6: pass tier amount
+        args:     [],
         chainId:  activeChain.id,   // ← force Celo
       });
       setStatus("done");

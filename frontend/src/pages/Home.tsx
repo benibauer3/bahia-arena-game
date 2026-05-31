@@ -287,7 +287,7 @@ export default function Home() {
               className={`grid grid-cols-4 px-2 py-2.5 border-b last:border-b-0 border-arena-border/50
                 ${t.highlight ? "bg-arena-primary/8" : "bg-arena-surface/40"}`}
             >
-              <p className="text-[10px] font-semibold text-white text-center">{t.tagLine}</p>
+              <p className="text-[10px] font-semibold text-white text-center">{t.label}</p>
               <p className="text-[10px] text-arena-muted text-center">{t.label}</p>
               <p className={`text-[10px] font-bold text-center
                 ${t.tier === 4 ? "text-arena-primary"

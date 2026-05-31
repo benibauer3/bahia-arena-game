@@ -24,6 +24,19 @@ export interface DifficultyBreakdown {
   legendary: number;
 }
 
+/** Ranked tier (1–4). Stored in localStorage, applied as a points multiplier.
+ *  0 = not in ranked (free trial).
+ *  1 = Starter  (1×  pts, free)
+ *  2 = Challenger (1.5× pts, free)
+ *  3 = Pioneer  (2×  pts, free + 🏅 badge)
+ *  4 = Elite    (2.5× pts, requires 1 USDT on-chain deposit + yield + monthly rewards)
+ */
+export type PlayerTier = 0 | 1 | 2 | 3 | 4;
+
+export const TIER_MULTIPLIER: Record<PlayerTier, number> = {
+  0: 1, 1: 1, 2: 1.5, 3: 2, 4: 2.5,
+};
+
 export interface PlayerProfile {
   address:    string;
   username:   string;
@@ -33,6 +46,7 @@ export interface PlayerProfile {
   xId?:       string;       // X user ID (for deduplication)
   xName?:     string;       // Display name from X (e.g. "Benjamin Bauer")
   // ─────────────────────────────────────────────────────────────────────────
+  tier:       PlayerTier;   // ranked tier (0 = free trial)
   points:     number;
   wins:       number;
   losses:     number;
@@ -118,8 +132,12 @@ function defaultWinsByDiff(): DifficultyBreakdown {
 export function getAllProfiles(): PlayerProfile[] {
   try {
     const raw = JSON.parse(localStorage.getItem(PK) ?? "[]") as PlayerProfile[];
-    // Ensure winsByDiff exists on every profile (migration guard)
-    return raw.map(p => ({ ...p, winsByDiff: p.winsByDiff ?? defaultWinsByDiff() }));
+    // Ensure winsByDiff + tier exist on every profile (migration guard)
+    return raw.map(p => ({
+      ...p,
+      tier:       (p.tier ?? 0) as PlayerTier,
+      winsByDiff: p.winsByDiff ?? defaultWinsByDiff(),
+    }));
   } catch {
     return [];
   }
@@ -148,6 +166,7 @@ export function createProfile(
     address,
     username:   username.trim(),
     xHandle:    xHandle?.replace(/^@/, "").trim() || undefined,
+    tier:       0,
     points:     0,
     wins:       0,
     losses:     0,
@@ -199,6 +218,20 @@ export function claimProfile(username: string, newAddress: string): PlayerProfil
   return claimed;
 }
 
+// ─── Tier management ─────────────────────────────────────────────────────────
+
+/**
+ * Set the ranked tier for a player (stored in localStorage).
+ * Tiers 1–3 are free. Tier 4 requires the on-chain 1 USDT deposit.
+ */
+export function setPlayerTier(address: string, tier: PlayerTier): PlayerProfile | null {
+  const profile = getProfile(address);
+  if (!profile) return null;
+  const updated: PlayerProfile = { ...profile, tier };
+  saveProfile(updated);
+  return updated;
+}
+
 // ─── Record a match ───────────────────────────────────────────────────────────
 
 export function recordMatch(
@@ -215,16 +248,19 @@ export function recordMatch(
 
   const pts    = DIFF_PTS[difficulty];
   const streak = STREAK_BONUS[difficulty];
+  const mult   = TIER_MULTIPLIER[profile.tier ?? 0];
 
-  let pointsEarned = pts[result];
+  let pointsEarned = Math.round(pts[result] * mult);
   let newStreak    = profile.streak;
 
   if (result === "win") {
     newStreak += 1;
-    // Streak bonus — only the highest tier applies
-    if (newStreak >= 10) pointsEarned += streak.s10;
-    else if (newStreak >= 5) pointsEarned += streak.s5;
-    else if (newStreak >= 3) pointsEarned += streak.s3;
+    // Streak bonus — multiplied by tier as well
+    let streakBonus = 0;
+    if (newStreak >= 10) streakBonus = streak.s10;
+    else if (newStreak >= 5) streakBonus = streak.s5;
+    else if (newStreak >= 3) streakBonus = streak.s3;
+    pointsEarned += Math.round(streakBonus * mult);
   } else {
     newStreak = 0;
   }
@@ -303,61 +339,61 @@ export function ensureSeedData(): void {
 
   const seeds: PlayerProfile[] = [
     {
-      address: "0xSEED01", username: "CurupiraKing",  xHandle: "curupirabtc",
+      address: "0xSEED01", username: "CurupiraKing",  xHandle: "curupirabtc", tier: 4 as PlayerTier,
       points: 1240, wins: 42, losses:  8, draws: 2, streak: 5, bestStreak: 8,
       lastActive: Date.now(), joinedAt: Date.now(),
       winsByDiff: { easy: 10, medium: 18, hard: 11, legendary: 3 },
     },
     {
-      address: "0xSEED02", username: "IaraMystic",    xHandle: "iaramystic",
+      address: "0xSEED02", username: "IaraMystic",    xHandle: "iaramystic", tier: 4 as PlayerTier,
       points: 980,  wins: 35, losses: 10, draws: 4, streak: 3, bestStreak: 6,
       lastActive: Date.now(), joinedAt: Date.now(),
       winsByDiff: { easy: 8, medium: 16, hard: 9, legendary: 2 },
     },
     {
-      address: "0xSEED03", username: "LegendSlayer",  xHandle: undefined,
+      address: "0xSEED03", username: "LegendSlayer",  xHandle: undefined, tier: 3 as PlayerTier,
       points: 820,  wins: 28, losses: 12, draws: 1, streak: 2, bestStreak: 5,
       lastActive: Date.now(), joinedAt: Date.now(),
       winsByDiff: { easy: 5, medium: 12, hard: 8, legendary: 3 },
     },
     {
-      address: "0xSEED04", username: "BoitatáFire",   xHandle: "boitataweb3",
+      address: "0xSEED04", username: "BoitatáFire",   xHandle: "boitataweb3", tier: 3 as PlayerTier,
       points: 670,  wins: 24, losses: 13, draws: 3, streak: 1, bestStreak: 4,
       lastActive: Date.now(), joinedAt: Date.now(),
       winsByDiff: { easy: 7, medium: 10, hard: 6, legendary: 1 },
     },
     {
-      address: "0xSEED05", username: "AnhangaShadow", xHandle: undefined,
+      address: "0xSEED05", username: "AnhangaShadow", xHandle: undefined, tier: 2 as PlayerTier,
       points: 510,  wins: 20, losses:  9, draws: 5, streak: 0, bestStreak: 4,
       lastActive: Date.now(), joinedAt: Date.now(),
       winsByDiff: { easy: 6, medium: 9, hard: 5, legendary: 0 },
     },
     {
-      address: "0xSEED06", username: "TupãStorm",     xHandle: "tupastorm",
+      address: "0xSEED06", username: "TupãStorm",     xHandle: "tupastorm", tier: 2 as PlayerTier,
       points: 380,  wins: 16, losses: 11, draws: 2, streak: 2, bestStreak: 3,
       lastActive: Date.now(), joinedAt: Date.now(),
       winsByDiff: { easy: 5, medium: 7, hard: 4, legendary: 0 },
     },
     {
-      address: "0xSEED07", username: "web3warrior",   xHandle: undefined,
+      address: "0xSEED07", username: "web3warrior",   xHandle: undefined, tier: 1 as PlayerTier,
       points: 270,  wins: 12, losses: 10, draws: 1, streak: 0, bestStreak: 3,
       lastActive: Date.now(), joinedAt: Date.now(),
       winsByDiff: { easy: 4, medium: 6, hard: 2, legendary: 0 },
     },
     {
-      address: "0xSEED08", username: "celonaut",      xHandle: "celonaut",
+      address: "0xSEED08", username: "celonaut",      xHandle: "celonaut", tier: 1 as PlayerTier,
       points: 175,  wins:  9, losses:  9, draws: 2, streak: 0, bestStreak: 2,
       lastActive: Date.now(), joinedAt: Date.now(),
       winsByDiff: { easy: 3, medium: 5, hard: 1, legendary: 0 },
     },
     {
-      address: "0xSEED09", username: "chainbrawler",  xHandle: undefined,
+      address: "0xSEED09", username: "chainbrawler",  xHandle: undefined, tier: 1 as PlayerTier,
       points: 95,   wins:  6, losses:  8, draws: 3, streak: 0, bestStreak: 2,
       lastActive: Date.now(), joinedAt: Date.now(),
       winsByDiff: { easy: 3, medium: 3, hard: 0, legendary: 0 },
     },
     {
-      address: "0xSEED10", username: "bahiadegen",    xHandle: "bahiadegen",
+      address: "0xSEED10", username: "bahiadegen",    xHandle: "bahiadegen", tier: 1 as PlayerTier,
       points: 45,   wins:  3, losses: 10, draws: 1, streak: 0, bestStreak: 1,
       lastActive: Date.now(), joinedAt: Date.now(),
       winsByDiff: { easy: 2, medium: 1, hard: 0, legendary: 0 },
