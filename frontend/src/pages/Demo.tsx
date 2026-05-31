@@ -1193,24 +1193,91 @@ function BattleScreen({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PLAY GATE — wallet + deposit check
+// DEPOSIT TIERS — config shared between PlayGate and Home
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const DEPOSIT_TIERS = [
+  {
+    tier:       1,
+    amount:     BigInt(250_000),   // 0.25 USDT (6 dec)
+    label:      "0.25 USDT",
+    multiplier: "1×",
+    badge:      "",
+    tagLine:    "Starter",
+    color:      "border-white/20",
+    highlight:  false,
+    benefits:   ["Ranked mode unlocked", "1× points per win", "Yield on Aave V3"],
+  },
+  {
+    tier:       2,
+    amount:     BigInt(500_000),
+    label:      "0.50 USDT",
+    multiplier: "1.5×",
+    badge:      "",
+    tagLine:    "Challenger",
+    color:      "border-blue-400/40",
+    highlight:  false,
+    benefits:   ["1.5× points per win", "Faster ranking climb", "Yield on Aave V3"],
+  },
+  {
+    tier:       3,
+    amount:     BigInt(750_000),
+    label:      "0.75 USDT",
+    multiplier: "2×",
+    badge:      "🏅 Pioneer",
+    tagLine:    "Pioneer",
+    color:      "border-purple-400/50",
+    highlight:  false,
+    benefits:   ["2× points per win", "🏅 Pioneer badge", "Yield on Aave V3"],
+  },
+  {
+    tier:       4,
+    amount:     BigInt(1_000_000),
+    label:      "1.00 USDT",
+    multiplier: "2.5×",
+    badge:      "⭐ Elite",
+    tagLine:    "Elite",
+    color:      "border-arena-primary/60",
+    highlight:  true,
+    benefits:   ["2.5× points per win", "⭐ Monthly reward eligibility", "Yield on Aave V3"],
+  },
+] as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PLAY GATE — wallet + tiered deposit check
 // ─────────────────────────────────────────────────────────────────────────────
 
 function PlayGate({ children }: { children: React.ReactNode }) {
   const { address, status } = useAccount();
   const { connect, isPending: connecting } = useConnect();
   const { writeContractAsync, isPending: depositing } = useWriteContract();
-  const [approving, setApproving] = useState(false);
-  const [depositErr, setDepositErr] = useState("");
+  const [approving,   setApproving]   = useState(false);
+  const [depositErr,  setDepositErr]  = useState("");
+  const [selectedTier, setSelectedTier] = useState(4); // default: Elite
 
-  // Check if this address has already deposited 1 USDT
-  const { data: hasDeposit, isLoading: checkingDeposit, refetch } = useReadContract({
+  // Current deposit + tier
+  const { data: currentDeposit, isLoading: checkingDeposit, refetch } = useReadContract({
     address: ACTIVE_CONTRACTS.ArenaManager,
     abi: ARENA_ABI,
-    functionName: "hasDeposit",
+    functionName: "deposits",
     args: address ? [address] : undefined,
     query: { enabled: !!address },
   });
+  const { data: currentTierRaw } = useReadContract({
+    address: ACTIVE_CONTRACTS.ArenaManager,
+    abi: ARENA_ABI,
+    functionName: "depositTier",
+    args: address ? [address] : undefined,
+    query: { enabled: !!address },
+  });
+
+  const currentTier    = Number(currentTierRaw ?? 0);
+  const hasDeposit     = !!currentDeposit && (currentDeposit as bigint) > 0n;
+  const tierConfig     = DEPOSIT_TIERS[selectedTier - 1];
+  const topUp          = tierConfig.amount - ((currentDeposit as bigint) ?? 0n);
+  const isUpgrade      = hasDeposit && selectedTier > currentTier;
+  const alreadyAtTier  = hasDeposit && selectedTier === currentTier;
+  const downgrade      = selectedTier < currentTier;
 
   // USDT allowance for ArenaManager
   const { data: allowance, refetch: refetchAllowance } = useReadContract({
@@ -1221,10 +1288,10 @@ function PlayGate({ children }: { children: React.ReactNode }) {
     query: { enabled: !!address },
   });
 
-  const ENTRY = BigInt(1_000_000); // 1 USDT (6 decimals)
-  const needsApproval = (allowance ?? BigInt(0)) < ENTRY;
+  const needsApproval = (allowance ?? 0n) < topUp;
 
   const handleDeposit = async () => {
+    if (alreadyAtTier || downgrade || topUp <= 0n) return;
     setDepositErr("");
     try {
       if (needsApproval) {
@@ -1233,7 +1300,7 @@ function PlayGate({ children }: { children: React.ReactNode }) {
           address: ACTIVE_CONTRACTS.usdt,
           abi: ERC20_ABI,
           functionName: "approve",
-          args: [ACTIVE_CONTRACTS.ArenaManager, ENTRY],
+          args: [ACTIVE_CONTRACTS.ArenaManager, topUp],
         });
         await refetchAllowance();
         setApproving(false);
@@ -1242,7 +1309,7 @@ function PlayGate({ children }: { children: React.ReactNode }) {
         address: ACTIVE_CONTRACTS.ArenaManager,
         abi: ARENA_ABI,
         functionName: "deposit",
-        args: [],
+        args: [tierConfig.amount],
       });
       await refetch();
     } catch (e: any) {
@@ -1263,20 +1330,12 @@ function PlayGate({ children }: { children: React.ReactNode }) {
   // ── Not connected ────────────────────────────────────────────────────────
   if (status !== "connected" || !address) {
     return (
-      <div className="min-h-screen bg-arena-bg flex flex-col items-center justify-center px-6 text-center gap-6">
-        {/* Logo */}
-        <BahiaArenaLogo size={80} showWordmark={true} />
-
-        {/* Lock badge */}
-        <div className="w-20 h-20 rounded-2xl bg-arena-primary/10 border border-arena-primary/30 flex items-center justify-center">
-          <span className="text-4xl">⚔️</span>
-        </div>
-
+      <div className="min-h-screen bg-arena-bg flex flex-col items-center justify-center px-5 text-center gap-5 pb-8">
+        <BahiaArenaLogo size={72} showWordmark={true} />
         <div>
-          <h1 className="text-white text-xl font-bold mb-1">Ready to battle?</h1>
-          <p className="text-arena-muted text-sm">Connect your wallet to enter the arena</p>
+          <h1 className="text-white text-xl font-bold mb-1">⚔️ Ranked Mode</h1>
+          <p className="text-arena-muted text-sm">Connect your wallet to choose your tier and enter the arena</p>
         </div>
-
         <button
           onClick={() => connect({ connector: injected() })}
           disabled={connecting}
@@ -1285,18 +1344,12 @@ function PlayGate({ children }: { children: React.ReactNode }) {
         >
           {connecting ? "Connecting…" : "🔗 Connect Wallet"}
         </button>
-
-        {/* Benefits list */}
-        <div className="w-full max-w-xs space-y-2.5 text-left">
-          {[
-            { icon: "🏦", text: "1 USDT earns automatic yield on Aave V3" },
-            { icon: "🏆", text: "Compete in the monthly ranking & earn rewards" },
-            { icon: "⚔️", text: "Unlimited PvP, no cost per match" },
-            { icon: "🔓", text: "Withdraw your principal anytime" },
-          ].map(b => (
-            <div key={b.text} className="flex items-start gap-3 p-3 rounded-xl bg-arena-surface border border-arena-border">
-              <span className="text-lg shrink-0">{b.icon}</span>
-              <p className="text-xs text-arena-muted">{b.text}</p>
+        <div className="w-full max-w-xs grid grid-cols-2 gap-2 text-left">
+          {DEPOSIT_TIERS.map(t => (
+            <div key={t.tier} className={`p-3 rounded-xl bg-arena-surface border ${t.color}`}>
+              <p className="text-arena-primary font-bold text-sm">{t.label}</p>
+              <p className="text-white font-semibold text-xs mt-0.5">{t.multiplier} pts {t.badge}</p>
+              <p className="text-arena-muted text-[10px] mt-1">{t.tagLine}</p>
             </div>
           ))}
         </div>
@@ -1304,7 +1357,7 @@ function PlayGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // ── Connected but checking deposit status ────────────────────────────────
+  // ── Checking deposit ─────────────────────────────────────────────────────
   if (checkingDeposit) {
     return (
       <div className="min-h-screen bg-arena-bg flex items-center justify-center gap-3">
@@ -1314,69 +1367,153 @@ function PlayGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // ── Connected but no deposit ─────────────────────────────────────────────
-  if (!hasDeposit) {
+  // ── No deposit yet / tier selection screen ───────────────────────────────
+  if (!hasDeposit || isUpgrade) {
     const busy = approving || depositing;
+    const TIER_COLORS: Record<number, string> = {
+      1: "border-white/20   bg-white/5",
+      2: "border-blue-400/40 bg-blue-400/5",
+      3: "border-purple-400/50 bg-purple-400/5",
+      4: "border-arena-primary/60 bg-arena-primary/10",
+    };
+    const TIER_RING: Record<number, string> = {
+      1: "ring-white/30",
+      2: "ring-blue-400/50",
+      3: "ring-purple-400/50",
+      4: "ring-arena-primary/60",
+    };
+
     return (
-      <div className="min-h-screen bg-arena-bg flex flex-col items-center justify-center px-6 text-center gap-6">
-        <BahiaArenaLogo size={70} showWordmark={true} />
-
-        <div className="w-20 h-20 rounded-2xl bg-arena-primary/10 border border-arena-primary/30 flex items-center justify-center">
-          <span className="text-4xl">🔒</span>
+      <div className="min-h-screen bg-arena-bg flex flex-col px-4 pt-6 pb-8 gap-4">
+        <div className="flex items-center gap-3">
+          <BahiaArenaLogo size={36} showWordmark={false} />
+          <div>
+            <h1 className="text-white font-bold text-base leading-tight">
+              {isUpgrade ? "Upgrade Your Tier" : "Choose Your Tier"}
+            </h1>
+            <p className="text-arena-muted text-xs">
+              {isUpgrade
+                ? `Currently Tier ${currentTier} · Pay only the difference`
+                : "Deposit earns Aave V3 yield while you play"}
+            </p>
+          </div>
         </div>
 
-        <div>
-          <h1 className="text-white text-xl font-bold mb-1">Deposit 1 USDT</h1>
-          <p className="text-arena-muted text-sm">
-            Your deposit earns yield on Aave V3 while you play
+        {/* Tier cards */}
+        <div className="grid grid-cols-2 gap-2">
+          {DEPOSIT_TIERS.map(t => {
+            const isSelected = selectedTier === t.tier;
+            const isCurrent  = currentTier === t.tier && hasDeposit;
+            const isLocked   = t.tier < currentTier; // can't downgrade
+
+            return (
+              <button
+                key={t.tier}
+                onClick={() => !isLocked && setSelectedTier(t.tier)}
+                disabled={isLocked}
+                className={`relative text-left p-3 rounded-2xl border-2 transition-all active:scale-[0.97]
+                  ${isSelected ? `${TIER_COLORS[t.tier]} ring-2 ${TIER_RING[t.tier]}` : "border-arena-border bg-arena-surface"}
+                  ${isLocked ? "opacity-30 cursor-not-allowed" : ""}
+                `}
+              >
+                {/* Current badge */}
+                {isCurrent && (
+                  <span className="absolute top-1.5 right-1.5 text-[8px] font-bold bg-arena-success/20 text-arena-success border border-arena-success/30 px-1.5 py-0.5 rounded-full">
+                    ACTIVE
+                  </span>
+                )}
+
+                <p className={`font-bold text-sm ${isSelected ? "text-white" : "text-arena-muted"}`}>
+                  {t.label}
+                </p>
+
+                {/* Big multiplier */}
+                <p className={`font-display font-black text-2xl leading-tight mt-0.5
+                  ${t.tier === 4 ? "text-arena-primary"
+                    : t.tier === 3 ? "text-purple-400"
+                    : t.tier === 2 ? "text-blue-400"
+                    : "text-white/60"}`}>
+                  {t.multiplier}
+                </p>
+                <p className={`text-[9px] font-semibold uppercase tracking-wider mt-0.5
+                  ${isSelected ? "text-white/60" : "text-arena-muted/50"}`}>
+                  points/win
+                </p>
+
+                {/* Badge */}
+                {t.badge && (
+                  <p className="text-[10px] font-bold mt-1.5">{t.badge}</p>
+                )}
+
+                {/* Tag */}
+                <p className={`text-[10px] mt-1 ${isSelected ? "text-white/50" : "text-arena-muted/40"}`}>
+                  {t.tagLine}
+                </p>
+
+                {/* Selected checkmark */}
+                {isSelected && (
+                  <div className="absolute bottom-2 right-2 w-4 h-4 rounded-full bg-arena-primary flex items-center justify-center">
+                    <span className="text-[9px] font-black text-arena-bg">✓</span>
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Tier detail benefits */}
+        <div className={`p-3.5 rounded-2xl border ${TIER_COLORS[selectedTier]} transition-all`}>
+          <p className="text-white font-semibold text-sm mb-2">
+            {tierConfig.tagLine} tier benefits
           </p>
+          <div className="space-y-1">
+            {tierConfig.benefits.map(b => (
+              <p key={b} className="text-xs text-arena-muted flex items-center gap-1.5">
+                <span className="text-arena-success text-[10px]">✓</span> {b}
+              </p>
+            ))}
+          </div>
+          {isUpgrade && topUp > 0n && (
+            <div className="mt-2.5 pt-2.5 border-t border-white/10">
+              <p className="text-xs text-arena-muted">
+                Top-up cost: <span className="text-white font-bold">{Number(topUp) / 1e6} USDT</span>
+                {" "}(you already deposited {Number(currentDeposit as bigint) / 1e6} USDT)
+              </p>
+            </div>
+          )}
         </div>
 
-        {/* Steps indicator */}
-        <div className="w-full max-w-xs flex items-center gap-2 text-xs">
-          <div className={`flex-1 flex items-center gap-1.5 p-2 rounded-xl border ${!needsApproval ? "border-arena-success/40 bg-arena-success/5 text-arena-success" : "border-arena-border bg-arena-surface text-arena-muted"}`}>
+        {/* Steps */}
+        <div className="flex items-center gap-2 text-xs">
+          <div className={`flex-1 flex items-center gap-1.5 p-2 rounded-xl border
+            ${!needsApproval ? "border-arena-success/40 bg-arena-success/5 text-arena-success"
+              : "border-arena-border bg-arena-surface text-arena-muted"}`}>
             <span>{!needsApproval ? "✅" : "1️⃣"}</span>
             <span>Approve USDT</span>
           </div>
-          <span className="text-arena-border">→</span>
+          <span className="text-arena-border shrink-0">→</span>
           <div className="flex-1 flex items-center gap-1.5 p-2 rounded-xl border border-arena-border bg-arena-surface text-arena-muted">
             <span>2️⃣</span>
-            <span>Deposit</span>
+            <span>{isUpgrade ? "Upgrade" : "Deposit"}</span>
           </div>
         </div>
 
         <button
           onClick={handleDeposit}
-          disabled={busy}
-          className="w-full max-w-xs py-4 rounded-2xl bg-arena-primary text-arena-bg font-bold text-base disabled:opacity-60 active:scale-95 transition-transform"
+          disabled={busy || alreadyAtTier || downgrade || topUp <= 0n}
+          className="w-full py-4 rounded-2xl bg-arena-primary text-arena-bg font-bold text-base disabled:opacity-50 active:scale-95 transition-transform"
           style={{ boxShadow: "0 4px 20px rgba(246,201,14,0.35)" }}
         >
-          {approving
-            ? "⏳ Approving USDT…"
-            : depositing
-            ? "⏳ Depositing…"
-            : needsApproval
-            ? "💰 Approve + Deposit 1 USDT"
-            : "💰 Deposit 1 USDT"}
+          {approving  ? "⏳ Approving USDT…"
+           : depositing ? "⏳ Depositing…"
+           : alreadyAtTier ? `✓ Already at Tier ${currentTier}`
+           : needsApproval ? `💰 Approve + Deposit ${Number(topUp) / 1e6} USDT`
+           : `💰 Deposit ${Number(topUp) / 1e6} USDT`}
         </button>
 
         {depositErr && (
-          <p className="text-arena-danger text-xs max-w-xs">{depositErr}</p>
+          <p className="text-arena-danger text-xs text-center px-2">{depositErr}</p>
         )}
-
-        {/* Benefits */}
-        <div className="w-full max-w-xs space-y-2 text-left">
-          {[
-            { icon: "📈", text: "Auto yield — your 1 USDT grows while you play" },
-            { icon: "🏆", text: "Top 10 ranking players share yield every 30th" },
-            { icon: "🔓", text: "Withdraw your principal anytime" },
-          ].map(b => (
-            <div key={b.text} className="flex items-start gap-3 p-3 rounded-xl bg-arena-surface border border-arena-border">
-              <span className="text-lg shrink-0">{b.icon}</span>
-              <p className="text-xs text-arena-muted">{b.text}</p>
-            </div>
-          ))}
-        </div>
       </div>
     );
   }

@@ -52,20 +52,25 @@ const BATTLE_COMPONENTS = [
   { name: "startedAt", type: "uint64"  },
 ] as const;
 
-// ─── ArenaManager ABI (v5 — dailyCheckIn + challenges + recordBattle + Pausable) ─
+// ─── ArenaManager ABI (v6 — tiered deposits 0.25/0.50/0.75/1.00 USDT) ─────────
 export const ARENA_ABI = [
-  // ── Constants / immutable reads ──────────────────────────────────────────
-  { name: "ENTRY_FEE",          type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { name: "WIN_POINTS",         type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { name: "LOSS_POINTS",        type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  // ── Tier constants ────────────────────────────────────────────────────────
+  { name: "TIER1_AMOUNT",       type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "TIER2_AMOUNT",       type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "TIER3_AMOUNT",       type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "TIER4_AMOUNT",       type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "WIN_POINTS_BASE",    type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { name: "CHECKIN_POINTS",     type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { name: "CHECKIN_COOLDOWN",   type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
 
   // ── State reads ──────────────────────────────────────────────────────────
   { name: "deposits",           type: "function", stateMutability: "view", inputs: [{ name: "player", type: "address" }], outputs: [{ type: "uint256" }] },
+  { name: "depositTier",        type: "function", stateMutability: "view", inputs: [{ name: "player", type: "address" }], outputs: [{ type: "uint8"   }] },
   { name: "totalDeposits",      type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { name: "totalYield",         type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { name: "hasDeposit",         type: "function", stateMutability: "view", inputs: [{ name: "player", type: "address" }], outputs: [{ type: "bool" }] },
+  { name: "rewardEligible",     type: "function", stateMutability: "view", inputs: [{ name: "player", type: "address" }], outputs: [{ type: "bool" }] },
+  { name: "winPointsForPlayer", type: "function", stateMutability: "view", inputs: [{ name: "player", type: "address" }], outputs: [{ type: "uint256" }] },
   { name: "currentMonth",       type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { name: "monthStart",         type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { name: "secondsToMonthEnd",  type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
@@ -101,8 +106,8 @@ export const ARENA_ABI = [
   },
 
   // ── Writes ───────────────────────────────────────────────────────────────
-  // Deposit / Withdraw
-  { name: "deposit",            type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
+  // Deposit / Withdraw — v6: deposit(uint256 tierAmount)
+  { name: "deposit",            type: "function", stateMutability: "nonpayable", inputs: [{ name: "tierAmount", type: "uint256" }], outputs: [] },
   { name: "withdraw",           type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
 
   // Daily check-in
@@ -205,7 +210,8 @@ export const ARENA_ABI = [
   },
 
   // ── Events ────────────────────────────────────────────────────────────────
-  { name: "Deposited",         type: "event", inputs: [{ name: "player",     type: "address", indexed: true }, { name: "amount",      type: "uint256" }] },
+  { name: "Deposited",         type: "event", inputs: [{ name: "player", type: "address", indexed: true }, { name: "totalAmount", type: "uint256" }, { name: "tier", type: "uint8" }] },
+  { name: "TierUpgraded",      type: "event", inputs: [{ name: "player", type: "address", indexed: true }, { name: "oldTier", type: "uint8" }, { name: "newTier", type: "uint8" }, { name: "topUp", type: "uint256" }] },
   { name: "Withdrawn",         type: "event", inputs: [{ name: "player",     type: "address", indexed: true }, { name: "amount",      type: "uint256" }] },
   { name: "CheckedIn",         type: "event", inputs: [{ name: "player",     type: "address", indexed: true }, { name: "timestamp",   type: "uint256" }] },
   { name: "BattleRecorded",    type: "event", inputs: [

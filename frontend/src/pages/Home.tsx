@@ -20,6 +20,7 @@ import { BattleArenaBackground }       from "@/components/BattleArena";
 import BahiaArenaLogo                  from "@/components/BahiaArenaLogo";
 import { useViewMode }                 from "@/lib/viewModeContext";
 import { getProfile }                  from "@/lib/playerStore";
+import { DEPOSIT_TIERS }               from "@/pages/Demo";
 
 // ─── Champion card com arena de fundo ─────────────────────────────────────────
 
@@ -257,10 +258,10 @@ export default function Home() {
         <p className="text-xs font-semibold text-white uppercase tracking-wider mb-3">How It Works</p>
         <div className="space-y-2">
           {[
-            { n:"1", emoji:"⚔️",  title:"Choose Your Champion",  desc:"5 champions from Brazilian mythology, each with unique powers.", color:"bg-yellow-500" },
-            { n:"2", emoji:"💰", title:"Deposit 1 USDT",       desc:"Your deposit earns yield on Aave V3 automatically.", color:"bg-green-500"  },
-            { n:"3", emoji:"🃏", title:"Card Battles",         desc:"3 basic + 1 ultimate per champion. Play up to 2 cards per turn.", color:"bg-blue-500" },
-            { n:"4", emoji:"🏆", title:"Monthly Ranking",      desc:"Top 10 players share yield every month. Withdraw anytime.",            color:"bg-purple-500" },
+            { n:"1", emoji:"⚔️",  title:"Play Free",            desc:"Jump in without a wallet. Pick your champion and battle the AI — no friction.", color:"bg-yellow-500" },
+            { n:"2", emoji:"🥊",  title:"Join Ranked",          desc:"Choose your tier (0.25–1.00 USDT). Your deposit earns yield on Aave V3.", color:"bg-green-500"  },
+            { n:"3", emoji:"🃏", title:"Card Battles",          desc:"3 basic + 1 ultimate per champion. Play up to 2 cards per turn.", color:"bg-blue-500" },
+            { n:"4", emoji:"🏆", title:"Monthly Ranking",       desc:"Top Tier 4 players share yield every month. Withdraw anytime.", color:"bg-purple-500" },
           ].map(s => (
             <div key={s.n} className="flex items-start gap-3 p-3 rounded-xl bg-arena-surface border border-arena-border">
               <div className={`w-7 h-7 rounded-lg ${s.color} flex items-center justify-center shrink-0`}>
@@ -270,6 +271,34 @@ export default function Home() {
                 <p className="text-sm font-semibold text-white">{s.emoji} {s.title}</p>
                 <p className="text-[11px] text-arena-muted mt-0.5">{s.desc}</p>
               </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Tier table */}
+        <div className="mt-3 rounded-2xl overflow-hidden border border-arena-border">
+          <div className="grid grid-cols-4 bg-arena-surface/80 border-b border-arena-border px-2 py-2">
+            {["Tier", "Deposit", "Points", "Reward"].map(h => (
+              <p key={h} className="text-[9px] font-bold text-arena-muted uppercase tracking-wider text-center">{h}</p>
+            ))}
+          </div>
+          {DEPOSIT_TIERS.map(t => (
+            <div key={t.tier}
+              className={`grid grid-cols-4 px-2 py-2.5 border-b last:border-b-0 border-arena-border/50
+                ${t.highlight ? "bg-arena-primary/8" : "bg-arena-surface/40"}`}
+            >
+              <p className="text-[10px] font-semibold text-white text-center">{t.tagLine}</p>
+              <p className="text-[10px] text-arena-muted text-center">{t.label}</p>
+              <p className={`text-[10px] font-bold text-center
+                ${t.tier === 4 ? "text-arena-primary"
+                  : t.tier === 3 ? "text-purple-400"
+                  : t.tier === 2 ? "text-blue-400"
+                  : "text-white/60"}`}>
+                {t.multiplier}
+              </p>
+              <p className="text-[10px] text-arena-muted text-center">
+                {t.tier === 4 ? "✅" : "—"}
+              </p>
             </div>
           ))}
         </div>

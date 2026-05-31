@@ -3,63 +3,24 @@ pragma solidity ^0.8.20;
 
 /*
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║              ARENAMANAGER v5 — BAHIA ARENA PROTOCOL                        ║
+ * ║              ARENAMANAGER v6 — BAHIA ARENA PROTOCOL                        ║
  * ║                                                                              ║
- * ║  TRANSACTION-MAXIMISATION STRATEGY (Proof of Ship Leaderboard)              ║
+ * ║  TIERED DEPOSIT SYSTEM                                                       ║
  * ║  ─────────────────────────────────────────────────────────────               ║
- * ║  Every player interaction generates ≥1 on-chain transaction:                ║
+ * ║  4 deposit tiers unlock progressive benefits:                                ║
  * ║                                                                              ║
- * ║  1. deposit()                  — approve + supply to Aave = 2 txs           ║
- * ║  2. recordBattle(...)          — called after every game battle = 1 tx      ║
- * ║  3. dailyCheckIn()             — 1 tx/day per player (20h cooldown)         ║
- * ║  4. createChallenge(...)       — PvP challenge creation = 1 tx              ║
- * ║  5. acceptChallenge(...)       — PvP challenge acceptance = 1 tx            ║
- * ║  6. resolveChallenge(...)      — settle a PvP challenge = 1 tx              ║
- * ║  7. distributeMonthlyRewards() — monthly yield distribution = 1 tx          ║
- * ║  8. withdraw()                 — player exits = 1 tx                        ║
+ * ║  Tier 1 — 0.25 USDT  → Ranked mode unlocked (1× points)                    ║
+ * ║  Tier 2 — 0.50 USDT  → 1.5× points multiplier                              ║
+ * ║  Tier 3 — 0.75 USDT  → 2× points + Pioneer badge                           ║
+ * ║  Tier 4 — 1.00 USDT  → 2.5× points + monthly rewards eligibility           ║
  * ║                                                                              ║
- * ║  At 100 players × 5 battles/day → 500+ txs/day from battles alone.         ║
- * ║  Daily check-ins add another 100 txs/day.                                   ║
- * ║  PvP challenges (create + accept + resolve) × N = 3N more txs.             ║
- * ║                                                                              ║
- * ║  UNIQUE WALLET STRATEGY:                                                     ║
- * ║  • Low entry fee (1 USDT) lowers barrier — maximises unique depositors.     ║
- * ║  • Check-in incentive keeps players active daily.                           ║
- * ║  • Monthly yield distribution rewards top players → retention loop.         ║
+ * ║  Upgrades: pay only the difference to move to a higher tier.                ║
+ * ║  All deposits earn yield on Aave V3 while the player is active.             ║
  * ║                                                                              ║
  * ╚══════════════════════════════════════════════════════════════════════════════╝
  *
- * @title  ArenaManager v5 — Aave V3 Yield-Bearing PvP Arena
+ * @title  ArenaManager v6 — Tiered Deposit + Aave V3 Yield-Bearing PvP Arena
  * @author Bahia Arena Protocol
- * @notice Turn-based PvP game on Celo where all entry deposits earn yield via Aave V3.
- *         Every 30 days, 60% of accumulated yield is distributed to top-ranked players.
- *         40% goes to the protocol treasury.
- *
- * ── Architecture ──────────────────────────────────────────────────────────────
- *
- *   Player ──deposit()──▶ ArenaManager ──supply()──▶ Aave V3 Pool
- *                              │                          │
- *                        tracks principal           aUSDT grows over time
- *                              │
- *              PvP battles/challenges update rankingPoints[player]
- *              Daily check-ins award CHECKIN_POINTS per day
- *                              │
- *              Day 30: distributeMonthlyRewards(topPlayers[], basisPoints[])
- *                      ─ withdraw(yield × 60%) → top players (proportional to bps)
- *                      ─ withdraw(yield × 40%) → treasury
- *
- * ── Aave V3 on Celo Mainnet ───────────────────────────────────────────────────
- *   Pool Proxy  : 0x794a61358D6845594F94dc1DB02A252b5b4814aD
- *   USDT        : 0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e  (6 dec)
- *   aUSDT       : resolved at deploy via pool.getReserveData(USDT).aTokenAddress
- *
- * ── Security ─────────────────────────────────────────────────────────────────
- *   • Ownable2Step — two-step ownership transfer prevents accidental loss.
- *   • SafeERC20 — handles USDT non-standard approve (forceApprove).
- *   • ReentrancyGuard — all external state-changing functions.
- *   • Pausable — owner can halt all player-facing writes in emergency.
- *   • Check-Effects-Interactions on every function with external calls.
- *   • ECDSA oracle binding to chainId + contract address (cross-chain replay safe).
  */
 
 import "@openzeppelin/contracts/access/Ownable2Step.sol";
@@ -95,12 +56,11 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
         uint64               startedAt;
     }
 
-    /// @dev Named-champion PvP challenge (off-chain game, on-chain record)
     struct Challenge {
         address challenger;
         address opponent;
         string  champChallenger;
-        string  champOpponent;   // filled by acceptChallenge
+        string  champOpponent;
         bool    accepted;
         bool    resolved;
         uint256 createdAt;
@@ -116,19 +76,25 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
         bool    closed;
     }
 
-    // ─── Constants ────────────────────────────────────────────────────────────
+    // ─── Deposit Tier Constants ───────────────────────────────────────────────
 
-    uint256 public constant PRECISION          = 1e18;
-    uint256 public constant MONTH_DURATION     = 30 days;
-    uint256 public constant ENTRY_FEE          = 1_000_000;  // 1 USDT (6 decimals)
-    uint256 public constant WIN_POINTS         = 10;
-    uint256 public constant LOSS_POINTS        = 2;
-    uint256 public constant CHECKIN_POINTS     = 1;
-    uint256 public constant CHECKIN_COOLDOWN   = 20 hours;   // ~once per day with buffer
-    uint256 public constant REWARDS_PLAYER_PCT = 60;
+    uint256 public constant TIER1_AMOUNT = 250_000;   // 0.25 USDT (6 dec)
+    uint256 public constant TIER2_AMOUNT = 500_000;   // 0.50 USDT
+    uint256 public constant TIER3_AMOUNT = 750_000;   // 0.75 USDT
+    uint256 public constant TIER4_AMOUNT = 1_000_000; // 1.00 USDT
+
+    // ─── Game Constants ───────────────────────────────────────────────────────
+
+    uint256 public constant PRECISION            = 1e18;
+    uint256 public constant MONTH_DURATION       = 30 days;
+    uint256 public constant WIN_POINTS_BASE      = 10;
+    uint256 public constant LOSS_POINTS_BASE     = 2;
+    uint256 public constant CHECKIN_POINTS       = 1;
+    uint256 public constant CHECKIN_COOLDOWN     = 20 hours;
+    uint256 public constant REWARDS_PLAYER_PCT   = 60;
     uint256 public constant REWARDS_TREASURY_PCT = 40;
-    uint256 public constant MAX_TOP_RANK       = 100;
-    uint16  public constant AAVE_REFERRAL      = 0;
+    uint256 public constant MAX_TOP_RANK         = 100;
+    uint16  public constant AAVE_REFERRAL        = 0;
 
     // ─── Infrastructure ───────────────────────────────────────────────────────
 
@@ -141,21 +107,22 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
 
     // ─── Entry Pool ───────────────────────────────────────────────────────────
 
-    /// @notice Sum of all active principal deposits currently in Aave.
     uint256 public totalDeposits;
 
     mapping(address => uint256) public deposits;
+    /// @notice Tier level 1–4 for each player (0 = no deposit).
+    mapping(address => uint8)   public depositTier;
 
-    // ─── Classic PvP Battles (class-based, on-chain settlement) ──────────────
+    // ─── Classic PvP Battles ─────────────────────────────────────────────────
 
     uint256 public nextBattleId;
     uint256 public battleTimeout;
 
     mapping(uint256 => Battle)  public battles;
     mapping(bytes32 => bool)    public usedSignatures;
-    mapping(address => uint256) public playerActiveBattle;  // +1 encoded (0 = none)
+    mapping(address => uint256) public playerActiveBattle;
 
-    // ─── Named-Champion Challenges (off-chain game, on-chain bookkeeping) ─────
+    // ─── Named-Champion Challenges ────────────────────────────────────────────
 
     uint256 public challengeCount;
     mapping(uint256 => Challenge) public challenges;
@@ -183,43 +150,40 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
 
     // ─── Events ───────────────────────────────────────────────────────────────
 
-    event Deposited(address indexed player, uint256 amount);
+    event Deposited(address indexed player, uint256 totalAmount, uint8 tier);
+    event TierUpgraded(address indexed player, uint8 oldTier, uint8 newTier, uint256 topUp);
     event Withdrawn(address indexed player, uint256 amount);
     event AaveSupplied(uint256 usdtAmount, uint256 aTokenReceived);
     event AaveWithdrawn(address indexed to, uint256 usdtAmount);
 
-    // Classic on-chain battles
     event BattleCreated(uint256 indexed battleId, address indexed playerA, uint8 classA);
     event BattleJoined(uint256 indexed battleId, address indexed playerB, uint8 classB);
     event BattleResolved(uint256 indexed battleId, address indexed winner, bool onChain);
     event BattleCancelled(uint256 indexed battleId);
 
-    // Named-champion battles / challenges
     event BattleRecorded(address indexed winner, address indexed loser, string champWinner, string champLoser, uint256 timestamp);
     event ChallengeCreated(uint256 indexed id, address indexed challenger, address indexed opponent);
     event ChallengeAccepted(uint256 indexed id, address indexed opponent);
     event ChallengeResolved(uint256 indexed id, address indexed winner);
 
-    // Ranking
     event CheckedIn(address indexed player, uint256 timestamp);
     event MatchRecorded(address indexed winner, address indexed loser, uint256 winnerPts, uint256 loserPts);
     event PointsAwarded(address indexed player, uint256 pts, bool isWinner);
 
-    // Monthly rewards
     event RewardsDistributed(uint256 totalYield, uint256 toPlayers, uint256 toTreasury);
     event MonthClosed(uint256 indexed month, uint256 yield, uint256 toPlayers, uint256 toTreasury);
     event PlayerRewarded(uint256 indexed month, address indexed player, uint256 amount, uint256 rank);
     event MonthAdvanced(uint256 newMonth, uint256 startedAt);
 
-    // Admin
     event KeeperSet(address indexed keeper);
     event TreasurySet(address indexed treasury);
     event AaveConfigSet(address pool, address aToken);
-    event EntryFeeChanged(uint256 fee);
 
     // ─── Errors ───────────────────────────────────────────────────────────────
 
-    error AlreadyDeposited();
+    error InvalidTierAmount();
+    error TierDowngradeNotAllowed();
+    error AlreadyAtThisTier();
     error NotDeposited();
     error HasActiveBattle();
     error BattleNotOpen();
@@ -242,6 +206,7 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
     error NotChallengeOpponent();
     error ChallengeAlreadyResolved();
     error InvalidChallengeWinner();
+    error NotRewardEligible();
 
     // ─── Modifiers ────────────────────────────────────────────────────────────
 
@@ -252,12 +217,6 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
 
     // ─── Constructor ──────────────────────────────────────────────────────────
 
-    /**
-     * @param _usdt      USDT contract address (6 dec on Celo mainnet)
-     * @param _aavePool  Aave V3 Pool Proxy — address(0) disables Aave (testnet)
-     * @param _aUSDT     aToken for USDT — address(0) if Aave disabled
-     * @param _treasury  Protocol / treasury wallet
-     */
     constructor(
         address _usdt,
         address _aavePool,
@@ -273,7 +232,7 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
         oracle            = msg.sender;
         battleTimeout     = 30 minutes;
         topRankCount      = 10;
-        yieldToPlayersBps = 6_000; // 60%
+        yieldToPlayersBps = 6_000;
         monthStart        = block.timestamp;
 
         if (_aavePool != address(0) && _aUSDT != address(0)) {
@@ -284,35 +243,56 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // SECTION 1 — DEPOSIT & WITHDRAW
+    // SECTION 1 — TIERED DEPOSIT & WITHDRAW
     // ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * @notice Deposit ENTRY_FEE (1 USDT) into the yield pool.
-     *         Caller must first approve ArenaManager for ENTRY_FEE.
-     *         Funds are supplied to Aave V3 immediately (if enabled).
-     *         Generates 2 transactions: approve + this call (supply is internal).
+     * @notice Deposit into the yield pool at one of 4 tiers.
+     *         • First deposit: pass any valid tier amount (250_000 / 500_000 / 750_000 / 1_000_000).
+     *         • Tier upgrade: pass the desired TOTAL tier amount; contract pulls the difference only.
+     *         • Caller must approve ArenaManager for the top-up amount before calling.
+     *
+     *         Tier benefits:
+     *           Tier 1 (0.25 USDT) — Ranked mode unlocked (1× points)
+     *           Tier 2 (0.50 USDT) — 1.5× points multiplier
+     *           Tier 3 (0.75 USDT) — 2× points + Pioneer badge
+     *           Tier 4 (1.00 USDT) — 2.5× points + monthly rewards eligibility
+     *
+     * @param tierAmount  Total desired tier amount (MUST be one of the 4 valid amounts).
      */
-    function deposit() external nonReentrant whenNotPaused {
-        if (deposits[msg.sender] > 0) revert AlreadyDeposited();
+    function deposit(uint256 tierAmount) external nonReentrant whenNotPaused {
+        if (!_isValidTierAmount(tierAmount)) revert InvalidTierAmount();
+
+        uint256 current = deposits[msg.sender];
+        uint8   oldTier = depositTier[msg.sender];
+
+        if (tierAmount < current) revert TierDowngradeNotAllowed();
+        if (tierAmount == current && current > 0) revert AlreadyAtThisTier();
+
+        uint256 topUp  = tierAmount - current;
+        uint8   newTier = _tierLevel(tierAmount);
 
         // ── Effects ────────────────────────────────────────────────────────────
-        deposits[msg.sender] = ENTRY_FEE;
-        totalDeposits       += ENTRY_FEE;
+        deposits[msg.sender]    = tierAmount;
+        depositTier[msg.sender] = newTier;
+        totalDeposits           += topUp;
         _addToRanking(msg.sender);
 
         // ── Interactions ───────────────────────────────────────────────────────
-        usdt.safeTransferFrom(msg.sender, address(this), ENTRY_FEE);
+        usdt.safeTransferFrom(msg.sender, address(this), topUp);
         if (_aaveEnabled()) {
-            _supplyToAave(ENTRY_FEE);
+            _supplyToAave(topUp);
         }
 
-        emit Deposited(msg.sender, ENTRY_FEE);
+        if (oldTier == 0) {
+            emit Deposited(msg.sender, tierAmount, newTier);
+        } else {
+            emit TierUpgraded(msg.sender, oldTier, newTier, topUp);
+        }
     }
 
     /**
-     * @notice Reclaim the deposited principal (ENTRY_FEE).
-     *         Yield earned during the current month remains in the pool.
+     * @notice Reclaim the deposited principal.
      *         Cannot withdraw while in an active classic battle.
      */
     function withdraw() external nonReentrant {
@@ -320,10 +300,12 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
         if (playerActiveBattle[msg.sender] != 0) revert HasActiveBattle();
 
         uint256 principal    = deposits[msg.sender];
+        uint8   tier         = depositTier[msg.sender];
 
         // ── Effects ────────────────────────────────────────────────────────────
-        deposits[msg.sender] = 0;
-        totalDeposits       -= principal;
+        deposits[msg.sender]    = 0;
+        depositTier[msg.sender] = 0;
+        totalDeposits           -= principal;
 
         // ── Interactions ───────────────────────────────────────────────────────
         if (_aaveEnabled()) {
@@ -333,22 +315,17 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
         }
 
         emit Withdrawn(msg.sender, principal);
+        emit TierUpgraded(msg.sender, tier, 0, 0);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // SECTION 2 — DAILY CHECK-IN
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /**
-     * @notice Players with an active deposit can check in once every CHECKIN_COOLDOWN
-     *         (20 hours) to earn CHECKIN_POINTS. Designed to generate 1 tx/day/player.
-     *         At 100 players this is 100 additional txs/day.
-     */
     function dailyCheckIn() external whenNotPaused {
         if (deposits[msg.sender] == 0) revert NotDeposited();
         if (block.timestamp < lastCheckIn[msg.sender] + CHECKIN_COOLDOWN) revert CheckInTooEarly();
 
-        // ── Effects ────────────────────────────────────────────────────────────
         lastCheckIn[msg.sender]    = block.timestamp;
         rankingPoints[msg.sender] += CHECKIN_POINTS;
         _addMonthPoints(msg.sender, CHECKIN_POINTS);
@@ -358,19 +335,9 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // SECTION 3 — NAMED-CHAMPION BATTLE RECORDING (off-chain game results)
+    // SECTION 3 — NAMED-CHAMPION BATTLE RECORDING
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /**
-     * @notice Record a completed named-champion battle result.
-     *         Called by the game backend (owner/keeper) after each match.
-     *         Champion names are free-form strings matching the frontend game.
-     *         Generates 1 tx per battle — at 100 players × 5 games/day = 500 txs/day.
-     * @param winner      Address of the winning player
-     * @param loser       Address of the losing player
-     * @param champWinner Champion name used by the winner
-     * @param champLoser  Champion name used by the loser
-     */
     function recordBattle(
         address winner,
         address loser,
@@ -379,34 +346,29 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
     ) external onlyKeeperOrOwner whenNotPaused {
         if (winner == address(0) || loser == address(0)) revert ZeroAddress();
 
-        // ── Effects ────────────────────────────────────────────────────────────
         _addToRanking(winner);
         _addToRanking(loser);
 
-        rankingPoints[winner] += WIN_POINTS;
-        rankingPoints[loser]  += LOSS_POINTS;
+        uint256 winPts  = _winPoints(winner);
+        uint256 losePts = _lossPoints(loser);
+
+        rankingPoints[winner] += winPts;
+        rankingPoints[loser]  += losePts;
         wins[winner]          += 1;
         losses[loser]         += 1;
 
-        _addMonthPoints(winner, WIN_POINTS);
-        _addMonthPoints(loser,  LOSS_POINTS);
+        _addMonthPoints(winner, winPts);
+        _addMonthPoints(loser,  losePts);
 
         emit BattleRecorded(winner, loser, champWinner, champLoser, block.timestamp);
-        emit PointsAwarded(winner, WIN_POINTS, true);
-        emit PointsAwarded(loser,  LOSS_POINTS, false);
+        emit PointsAwarded(winner, winPts,  true);
+        emit PointsAwarded(loser,  losePts, false);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // SECTION 4 — NAMED-CHAMPION PVP CHALLENGES (3 txs per challenge lifecycle)
+    // SECTION 4 — NAMED-CHAMPION PVP CHALLENGES
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /**
-     * @notice Create a named-champion PvP challenge against a specific opponent.
-     *         Both players must have an active deposit to participate.
-     *         Generates 1 tx (part of a 3-tx challenge lifecycle).
-     * @param opponent  Address of the challenged player
-     * @param myChamp   Challenger's chosen champion name
-     */
     function createChallenge(
         address opponent,
         string calldata myChamp
@@ -417,7 +379,6 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
         uint256 id = challengeCount;
         unchecked { challengeCount++; }
 
-        // ── Effects ────────────────────────────────────────────────────────────
         challenges[id] = Challenge({
             challenger:      msg.sender,
             opponent:        opponent,
@@ -431,36 +392,21 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
         emit ChallengeCreated(id, msg.sender, opponent);
     }
 
-    /**
-     * @notice Accept an open PvP challenge.
-     *         Only the designated opponent may call this.
-     *         Generates 1 tx (part of a 3-tx challenge lifecycle).
-     * @param challengeId  The challenge to accept
-     * @param myChamp      Opponent's chosen champion name
-     */
     function acceptChallenge(
         uint256 challengeId,
         string calldata myChamp
     ) external whenNotPaused {
         Challenge storage c = challenges[challengeId];
-        if (c.accepted || c.resolved)         revert ChallengeNotPending();
-        if (c.opponent != msg.sender)         revert NotChallengeOpponent();
-        if (deposits[msg.sender] == 0)        revert NotDeposited();
+        if (c.accepted || c.resolved)  revert ChallengeNotPending();
+        if (c.opponent != msg.sender)  revert NotChallengeOpponent();
+        if (deposits[msg.sender] == 0) revert NotDeposited();
 
-        // ── Effects ────────────────────────────────────────────────────────────
         c.accepted      = true;
         c.champOpponent = myChamp;
 
         emit ChallengeAccepted(challengeId, msg.sender);
     }
 
-    /**
-     * @notice Resolve a named-champion challenge and award points.
-     *         Called by keeper/owner after the off-chain game concludes.
-     *         Generates 1 tx (part of a 3-tx challenge lifecycle).
-     * @param challengeId  The challenge to resolve
-     * @param winner       Must be either challenger or opponent
-     */
     function resolveChallenge(
         uint256 challengeId,
         address winner
@@ -470,7 +416,6 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
         if (!c.accepted) revert ChallengeNotPending();
         if (winner != c.challenger && winner != c.opponent) revert InvalidChallengeWinner();
 
-        // ── Effects ────────────────────────────────────────────────────────────
         c.resolved = true;
 
         address loser = winner == c.challenger ? c.opponent : c.challenger;
@@ -478,27 +423,26 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
         _addToRanking(winner);
         _addToRanking(loser);
 
-        rankingPoints[winner] += WIN_POINTS;
-        rankingPoints[loser]  += LOSS_POINTS;
+        uint256 winPts  = _winPoints(winner);
+        uint256 losePts = _lossPoints(loser);
+
+        rankingPoints[winner] += winPts;
+        rankingPoints[loser]  += losePts;
         wins[winner]          += 1;
         losses[loser]         += 1;
 
-        _addMonthPoints(winner, WIN_POINTS);
-        _addMonthPoints(loser,  LOSS_POINTS);
+        _addMonthPoints(winner, winPts);
+        _addMonthPoints(loser,  losePts);
 
         emit ChallengeResolved(challengeId, winner);
-        emit PointsAwarded(winner, WIN_POINTS, true);
-        emit PointsAwarded(loser,  LOSS_POINTS, false);
+        emit PointsAwarded(winner, winPts,  true);
+        emit PointsAwarded(loser,  losePts, false);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // SECTION 5 — CLASSIC ON-CHAIN PVP BATTLES (class-based, BattleEngine)
+    // SECTION 5 — CLASSIC ON-CHAIN PVP BATTLES
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /**
-     * @notice Open a new PvP battle challenge (on-chain simulation path).
-     * @param class_ Your chosen champion class
-     */
     function createBattle(ChampionTypes.Class class_)
         external
         nonReentrant
@@ -523,9 +467,6 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
         emit BattleCreated(battleId, msg.sender, uint8(class_));
     }
 
-    /**
-     * @notice Accept an open battle challenge.
-     */
     function joinBattle(uint256 battleId, ChampionTypes.Class class_)
         external
         nonReentrant
@@ -545,9 +486,6 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
         emit BattleJoined(battleId, msg.sender, uint8(class_));
     }
 
-    /**
-     * @notice Resolve battle via oracle ECDSA signature (low-latency path).
-     */
     function resolveBattle(uint256 battleId, address winner, bytes calldata sig)
         external
         nonReentrant
@@ -567,9 +505,6 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
         _settlePvP(b, battleId, winner, false);
     }
 
-    /**
-     * @notice Resolve battle fully on-chain via BattleEngine simulation.
-     */
     function resolveOnChain(uint256 battleId) external nonReentrant {
         Battle storage b = battles[battleId];
         if (b.status != BattleStatus.ACTIVE) revert BattleNotActive();
@@ -585,9 +520,6 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
         _settlePvP(b, battleId, w, true);
     }
 
-    /**
-     * @notice Cancel an OPEN battle (by creator or owner) or a timed-out ACTIVE battle.
-     */
     function cancelBattle(uint256 battleId) external nonReentrant {
         Battle storage b = battles[battleId];
 
@@ -607,13 +539,9 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // SECTION 6 — LEGACY recordMatch (keeper-callable, no champion strings)
+    // SECTION 6 — LEGACY recordMatch
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /**
-     * @notice Record a completed match result (no champion names — simpler path).
-     *         Use recordBattle() for the full champion-name version.
-     */
     function recordMatch(address winner, address loser)
         external
         onlyKeeperOrOwner
@@ -624,35 +552,26 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
         _addToRanking(winner);
         _addToRanking(loser);
 
-        rankingPoints[winner] += WIN_POINTS;
-        rankingPoints[loser]  += LOSS_POINTS;
+        uint256 winPts  = _winPoints(winner);
+        uint256 losePts = _lossPoints(loser);
+
+        rankingPoints[winner] += winPts;
+        rankingPoints[loser]  += losePts;
         wins[winner]          += 1;
         losses[loser]         += 1;
 
-        _addMonthPoints(winner, WIN_POINTS);
-        _addMonthPoints(loser,  LOSS_POINTS);
+        _addMonthPoints(winner, winPts);
+        _addMonthPoints(loser,  losePts);
 
-        emit MatchRecorded(winner, loser, WIN_POINTS, LOSS_POINTS);
-        emit PointsAwarded(winner, WIN_POINTS, true);
-        emit PointsAwarded(loser,  LOSS_POINTS, false);
+        emit MatchRecorded(winner, loser, winPts, losePts);
+        emit PointsAwarded(winner, winPts,  true);
+        emit PointsAwarded(loser,  losePts, false);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // SECTION 7 — MONTHLY REWARD DISTRIBUTION
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /**
-     * @notice Distribute accumulated yield to the top-ranked players.
-     *
-     *         FORMULA:
-     *           yield       = aTokenBalance − totalDeposits
-     *           toPlayers   = yield × 60%
-     *           toTreasury  = yield × 40%
-     *           playerShare = toPlayers × basisPoints[i] / 10000
-     *
-     * @param topPlayers  Ordered array of winning player addresses
-     * @param basisPoints Basis-point shares for each player (must sum to 10000 = 100%)
-     */
     function distributeMonthlyRewards(
         address[] calldata topPlayers,
         uint256[] calldata basisPoints
@@ -661,13 +580,17 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
         nonReentrant
         onlyKeeperOrOwner
     {
-        // ── Guards ────────────────────────────────────────────────────────────
         if (block.timestamp < monthStart + MONTH_DURATION) revert MonthNotOver();
         if (monthSnapshots[currentMonth].closed)           revert MonthAlreadyClosed();
         if (topPlayers.length == 0)                        revert InvalidTopPlayers();
         if (topPlayers.length != basisPoints.length)       revert ArrayLengthMismatch();
 
-        // Verify basis points sum to 10000
+        // All top players must be Tier 4
+        for (uint256 i; i < topPlayers.length;) {
+            if (depositTier[topPlayers[i]] < 4) revert NotRewardEligible();
+            unchecked { ++i; }
+        }
+
         uint256 bpsSum;
         for (uint256 i; i < basisPoints.length;) {
             bpsSum += basisPoints[i];
@@ -675,13 +598,11 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
         }
         if (bpsSum != 10_000) revert BpsOutOfRange();
 
-        // ── Measure yield ─────────────────────────────────────────────────────
         uint256 totalPool = _poolBalance();
         if (totalPool <= totalDeposits) revert NoYieldAvailable();
 
         uint256 yield = totalPool - totalDeposits;
 
-        // ── Withdraw yield from Aave ──────────────────────────────────────────
         uint256 yieldWithdrawn;
         if (_aaveEnabled()) {
             yieldWithdrawn = aavePool.withdraw(address(usdt), yield, address(this));
@@ -693,7 +614,6 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
         uint256 actualToPlayers  = yieldWithdrawn * REWARDS_PLAYER_PCT / 100;
         uint256 actualToTreasury = yieldWithdrawn - actualToPlayers;
 
-        // ── Distribute proportionally ─────────────────────────────────────────
         uint256 actualDistributed;
         for (uint256 i; i < topPlayers.length;) {
             address player = topPlayers[i];
@@ -708,21 +628,16 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
             unchecked { ++i; }
         }
 
-        // ── Treasury (including rounding dust) ────────────────────────────────
         uint256 treasuryTotal = actualToTreasury + (actualToPlayers - actualDistributed);
         if (treasuryTotal > 0) {
             usdt.safeTransfer(treasury, treasuryTotal);
         }
 
-        // ── Re-deposit principal back into Aave ───────────────────────────────
         if (_aaveEnabled()) {
             uint256 localBal = usdt.balanceOf(address(this));
-            if (localBal > 0) {
-                _supplyToAave(localBal);
-            }
+            if (localBal > 0) _supplyToAave(localBal);
         }
 
-        // ── Snapshot ──────────────────────────────────────────────────────────
         monthSnapshots[currentMonth] = MonthSnapshot({
             totalPool:       totalPool,
             totalPrincipal:  totalDeposits,
@@ -747,13 +662,11 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
 
     function emergencyWithdrawFromAave() external onlyOwner nonReentrant {
         if (!_aaveEnabled()) revert AaveNotEnabled();
-
         uint256 aBalance = aUsdt.balanceOf(address(this));
         if (aBalance > 0) {
             uint256 withdrawn = aavePool.withdraw(address(usdt), type(uint256).max, address(this));
             emit AaveWithdrawn(address(this), withdrawn);
         }
-
         aavePool = IAaveV3Pool(address(0));
         aUsdt    = IERC20(address(0));
     }
@@ -761,14 +674,10 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
     function reEnableAave(address _pool, address _aToken) external onlyOwner nonReentrant {
         if (_pool   == address(0)) revert ZeroAddress();
         if (_aToken == address(0)) revert ZeroAddress();
-
         aavePool = IAaveV3Pool(_pool);
         aUsdt    = IERC20(_aToken);
-
         uint256 localBal = usdt.balanceOf(address(this));
-        if (localBal > 0) {
-            _supplyToAave(localBal);
-        }
+        if (localBal > 0) _supplyToAave(localBal);
         emit AaveConfigSet(_pool, _aToken);
     }
 
@@ -810,19 +719,13 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
     // SECTION 9 — VIEW FUNCTIONS
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /**
-     * @notice Return the top N players by lifetime rankingPoints.
-     *         Iterates up to MAX_TOP_RANK (100) entries for gas safety.
-     */
     function getTopPlayers(uint256 n)
         external
         view
         returns (address[] memory topAddrs, uint256[] memory topPts)
     {
         uint256 total = rankedPlayers.length;
-        if (total == 0) {
-            return (new address[](0), new uint256[](0));
-        }
+        if (total == 0) return (new address[](0), new uint256[](0));
 
         uint256 len  = total > MAX_TOP_RANK ? MAX_TOP_RANK : total;
         uint256 take = n > len ? len : n;
@@ -834,7 +737,6 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
             pts[i]    = rankingPoints[rankedPlayers[i]];
             unchecked { ++i; }
         }
-        // Selection sort descending — O(n²), acceptable for ≤100 players in view
         for (uint256 i; i < len;) {
             for (uint256 j = i + 1; j < len;) {
                 if (pts[j] > pts[i]) {
@@ -855,34 +757,37 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
         }
     }
 
-    /// @notice Total value currently in Aave (principal + accumulated yield).
-    function totalPoolBalance() external view returns (uint256) {
-        return _poolBalance();
+    /// @notice Whether a player has an active deposit (any tier).
+    function hasDeposit(address player) external view returns (bool) {
+        return deposits[player] > 0;
     }
 
-    /// @notice Accumulated yield = aToken balance − total deposits.
+    /// @notice Whether a player is eligible for monthly rewards (Tier 4 only).
+    function rewardEligible(address player) external view returns (bool) {
+        return depositTier[player] >= 4;
+    }
+
+    /// @notice Win points that `player` would earn at their current tier.
+    function winPointsForPlayer(address player) external view returns (uint256) {
+        return _winPoints(player);
+    }
+
+    function totalPoolBalance() external view returns (uint256) { return _poolBalance(); }
+
     function totalYield() external view returns (uint256) {
         uint256 pool = _poolBalance();
         return pool > totalDeposits ? pool - totalDeposits : 0;
     }
 
-    /// @notice Whether a player has an active deposit.
-    function hasDeposit(address player) external view returns (bool) {
-        return deposits[player] > 0;
-    }
-
-    /// @notice Seconds remaining until this month's distribution window opens.
     function secondsToMonthEnd() external view returns (uint256) {
         uint256 end = monthStart + MONTH_DURATION;
         return block.timestamp >= end ? 0 : end - block.timestamp;
     }
 
-    /// @notice Ranking points of `player` in the current month.
     function playerPoints(address player) external view returns (uint256) {
         return monthlyPoints[currentMonth][player];
     }
 
-    /// @notice All players who scored points in a given month.
     function monthPlayers(uint256 month) external view returns (address[] memory) {
         return _monthPlayers[month];
     }
@@ -936,14 +841,51 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
     // INTERNAL HELPERS
     // ═══════════════════════════════════════════════════════════════════════════
 
+    /// @dev Returns true if `amount` is one of the 4 valid tier amounts.
+    function _isValidTierAmount(uint256 amount) internal pure returns (bool) {
+        return amount == TIER1_AMOUNT
+            || amount == TIER2_AMOUNT
+            || amount == TIER3_AMOUNT
+            || amount == TIER4_AMOUNT;
+    }
+
+    /// @dev Converts a valid tier amount to its tier level (1–4).
+    function _tierLevel(uint256 amount) internal pure returns (uint8) {
+        if (amount == TIER1_AMOUNT) return 1;
+        if (amount == TIER2_AMOUNT) return 2;
+        if (amount == TIER3_AMOUNT) return 3;
+        return 4; // TIER4_AMOUNT (validated before call)
+    }
+
+    /**
+     * @dev Win points for `player` based on their tier.
+     *   Tier 1 → 10 pts (1×)
+     *   Tier 2 → 15 pts (1.5×)
+     *   Tier 3 → 20 pts (2×)
+     *   Tier 4 → 25 pts (2.5×)
+     *   No deposit → WIN_POINTS_BASE (keeper-awarded battles, no tier)
+     */
+    function _winPoints(address player) internal view returns (uint256) {
+        uint8 tier = depositTier[player];
+        if (tier == 1) return WIN_POINTS_BASE;        // 10
+        if (tier == 2) return WIN_POINTS_BASE * 3 / 2; // 15
+        if (tier == 3) return WIN_POINTS_BASE * 2;     // 20
+        if (tier == 4) return WIN_POINTS_BASE * 5 / 2; // 25
+        return WIN_POINTS_BASE;
+    }
+
+    function _lossPoints(address player) internal view returns (uint256) {
+        uint8 tier = depositTier[player];
+        if (tier >= 2) return LOSS_POINTS_BASE + 1; // 3 pts for tier 2+
+        return LOSS_POINTS_BASE; // 2 pts
+    }
+
     function _aaveEnabled() internal view returns (bool) {
         return address(aavePool) != address(0);
     }
 
     function _poolBalance() internal view returns (uint256) {
-        if (_aaveEnabled()) {
-            return aUsdt.balanceOf(address(this));
-        }
+        if (_aaveEnabled()) return aUsdt.balanceOf(address(this));
         return usdt.balanceOf(address(this));
     }
 
@@ -976,17 +918,20 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
         _addToRanking(winner);
         _addToRanking(loser);
 
-        rankingPoints[winner] += WIN_POINTS;
-        rankingPoints[loser]  += LOSS_POINTS;
+        uint256 winPts  = _winPoints(winner);
+        uint256 losePts = _lossPoints(loser);
+
+        rankingPoints[winner] += winPts;
+        rankingPoints[loser]  += losePts;
         wins[winner]          += 1;
         losses[loser]         += 1;
 
-        _addMonthPoints(winner, WIN_POINTS);
-        _addMonthPoints(loser,  LOSS_POINTS);
+        _addMonthPoints(winner, winPts);
+        _addMonthPoints(loser,  losePts);
 
         emit BattleResolved(battleId, winner, onChain);
-        emit PointsAwarded(winner, WIN_POINTS, true);
-        emit PointsAwarded(loser,  LOSS_POINTS, false);
+        emit PointsAwarded(winner, winPts,  true);
+        emit PointsAwarded(loser,  losePts, false);
     }
 
     function _addToRanking(address player) internal {
