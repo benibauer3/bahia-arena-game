@@ -20,6 +20,10 @@ export const CONTRACTS = {
 const network = (import.meta.env.VITE_NETWORK as keyof typeof CONTRACTS) ?? "celo";
 export const ACTIVE_CONTRACTS = CONTRACTS[network] ?? CONTRACTS.celo;
 
+// ─── Tier vault — receives 0.25/0.50/0.75 USDT direct transfers (tiers 1–3) ──
+// This is the ArenaManager treasury wallet.
+export const TIER_VAULT = "0x23bc4caab6a4d939c065c92022cd49d2b2bd5b36" as `0x${string}`;
+
 // ─── GoodDollar Constants ─────────────────────────────────────────────────────
 export const GOODDOLLAR_IDENTITY = "0xC361A6E67822a0EDc17D899227dd9FC50BD62F42" as `0x${string}`;
 export const GOODDOLLAR_TOKEN    = "0x62B8B11039FcfE5aB0C56E502b1C372A3d462a4D" as `0x${string}`;
@@ -29,6 +33,7 @@ export const ERC20_ABI = [
   { name: "balanceOf",  type: "function", stateMutability: "view",       inputs: [{ name: "owner",   type: "address" }],                                                outputs: [{ type: "uint256" }] },
   { name: "allowance",  type: "function", stateMutability: "view",       inputs: [{ name: "owner",   type: "address" }, { name: "spender", type: "address" }],          outputs: [{ type: "uint256" }] },
   { name: "approve",    type: "function", stateMutability: "nonpayable",  inputs: [{ name: "spender", type: "address" }, { name: "amount",  type: "uint256" }],          outputs: [{ type: "bool"    }] },
+  { name: "transfer",   type: "function", stateMutability: "nonpayable",  inputs: [{ name: "to",      type: "address" }, { name: "amount",  type: "uint256" }],          outputs: [{ type: "bool"    }] },
   { name: "decimals",   type: "function", stateMutability: "view",       inputs: [],                                                                                    outputs: [{ type: "uint8"   }] },
   { name: "symbol",     type: "function", stateMutability: "view",       inputs: [],                                                                                    outputs: [{ type: "string"  }] },
 ] as const;

@@ -23,8 +23,8 @@ import BahiaArenaLogo                   from "@/components/BahiaArenaLogo";
 import BattleAbilityFX                  from "@/components/BattleAbilityFX";
 import { usePlayerProfile }             from "@/hooks/usePlayerProfile";
 import { DIFF_PTS, STREAK_BONUS }       from "@/lib/playerStore";
-import { ACTIVE_CONTRACTS, ARENA_ABI, ERC20_ABI } from "@/lib/contracts";
-import { setPlayerTier, type PlayerTier }         from "@/lib/playerStore";
+import { ACTIVE_CONTRACTS, ARENA_ABI, ERC20_ABI, TIER_VAULT } from "@/lib/contracts";
+import { setPlayerTier, type PlayerTier }                      from "@/lib/playerStore";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1199,56 +1199,60 @@ function BattleScreen({
 
 export const DEPOSIT_TIERS = [
   {
-    tier:       1 as PlayerTier,
-    label:      "Starter",
-    price:      "Free",
-    multiplier: "1×",
-    badge:      "",
-    color:      "border-white/20",
-    ring:       "ring-white/30",
-    bg:         "bg-white/5",
-    highlight:  false,
-    requiresDeposit: false,
-    benefits:   ["Ranked mode unlocked", "1× points per win", "Local leaderboard"],
+    tier:        1 as PlayerTier,
+    label:       "Starter",
+    price:       "0.25 USDT",
+    amount:      BigInt(250_000),   // 0.25 USDT (6 dec)
+    multiplier:  "1×",
+    badge:       "",
+    color:       "border-white/20",
+    ring:        "ring-white/30",
+    bg:          "bg-white/5",
+    highlight:   false,
+    depositType: "direct" as const, // direct USDT transfer to treasury
+    benefits:    ["Ranked mode unlocked", "1× points per win", "Local ranking"],
   },
   {
-    tier:       2 as PlayerTier,
-    label:      "Challenger",
-    price:      "Free",
-    multiplier: "1.5×",
-    badge:      "",
-    color:      "border-blue-400/40",
-    ring:       "ring-blue-400/50",
-    bg:         "bg-blue-400/5",
-    highlight:  false,
-    requiresDeposit: false,
-    benefits:   ["1.5× points per win", "Faster ranking climb", "Local leaderboard"],
+    tier:        2 as PlayerTier,
+    label:       "Challenger",
+    price:       "0.50 USDT",
+    amount:      BigInt(500_000),
+    multiplier:  "1.5×",
+    badge:       "",
+    color:       "border-blue-400/40",
+    ring:        "ring-blue-400/50",
+    bg:          "bg-blue-400/5",
+    highlight:   false,
+    depositType: "direct" as const,
+    benefits:    ["1.5× points per win", "Faster ranking climb", "Local ranking"],
   },
   {
-    tier:       3 as PlayerTier,
-    label:      "Pioneer",
-    price:      "Free",
-    multiplier: "2×",
-    badge:      "🏅",
-    color:      "border-purple-400/50",
-    ring:       "ring-purple-400/50",
-    bg:         "bg-purple-400/5",
-    highlight:  false,
-    requiresDeposit: false,
-    benefits:   ["2× points per win", "🏅 Pioneer badge", "Local leaderboard"],
+    tier:        3 as PlayerTier,
+    label:       "Pioneer",
+    price:       "0.75 USDT",
+    amount:      BigInt(750_000),
+    multiplier:  "2×",
+    badge:       "🏅",
+    color:       "border-purple-400/50",
+    ring:        "ring-purple-400/50",
+    bg:          "bg-purple-400/5",
+    highlight:   false,
+    depositType: "direct" as const,
+    benefits:    ["2× points per win", "🏅 Pioneer badge", "Local ranking"],
   },
   {
-    tier:       4 as PlayerTier,
-    label:      "Elite",
-    price:      "1 USDT",
-    multiplier: "2.5×",
-    badge:      "⭐",
-    color:      "border-arena-primary/60",
-    ring:       "ring-arena-primary/60",
-    bg:         "bg-arena-primary/10",
-    highlight:  true,
-    requiresDeposit: true,
-    benefits:   ["2.5× points per win", "⭐ Monthly rewards", "Yield on Aave V3", "On-chain ranking"],
+    tier:        4 as PlayerTier,
+    label:       "Elite",
+    price:       "1.00 USDT",
+    amount:      BigInt(1_000_000),
+    multiplier:  "2.5×",
+    badge:       "⭐",
+    color:       "border-arena-primary/60",
+    ring:        "ring-arena-primary/60",
+    bg:          "bg-arena-primary/10",
+    highlight:   true,
+    depositType: "contract" as const, // ArenaManager.deposit() → Aave V3
+    benefits:    ["2.5× points per win", "⭐ Monthly rewards", "Yield on Aave V3", "On-chain ranking"],
   },
 ] as const;
 
@@ -1283,50 +1287,63 @@ function PlayGate({ children }: { children: React.ReactNode }) {
     query: { enabled: !!address && selectedTier === 4 },
   });
 
-  const ENTRY         = BigInt(1_000_000); // 1 USDT (6 dec) — v5 contract fixed amount
-  const needsApproval = (allowance ?? 0n) < ENTRY;
   const tierCfg       = DEPOSIT_TIERS[selectedTier - 1];
+  const ENTRY         = BigInt(1_000_000); // 1 USDT — v5 ArenaManager fixed amount
+
+  // Approval check — only needed for tier 4 (ArenaManager.deposit)
+  const needsApproval = selectedTier === 4 && (allowance ?? 0n) < ENTRY;
 
   // Check if player already has a saved tier
   const { profile: savedProfile } = usePlayerProfile();
   const savedTier = (savedProfile?.tier ?? 0) as PlayerTier;
 
-  // If they already confirmed a tier, go straight in
+  // If they already have a valid tier configured, go straight in
   const alreadyConfigured = savedTier > 0 && (savedTier < 4 || !!hasDeposit);
 
   const handleConfirmTier = async () => {
     if (!address) return;
     setDepositErr("");
 
-    if (selectedTier === 4) {
-      // Elite: needs on-chain deposit
-      if (!hasDeposit) {
-        try {
+    try {
+      if (tierCfg.depositType === "direct") {
+        // ── Tiers 1–3: direct USDT transfer to treasury (1 tx, no approval needed) ──
+        setApproving(true);
+        await writeContractAsync({
+          address:      ACTIVE_CONTRACTS.usdt,
+          abi:          ERC20_ABI,
+          functionName: "transfer",
+          args:         [TIER_VAULT, tierCfg.amount],
+        });
+        setApproving(false);
+      } else {
+        // ── Tier 4: ArenaManager.deposit() → Aave V3 ────────────────────────────
+        if (!hasDeposit) {
           if (needsApproval) {
             setApproving(true);
             await writeContractAsync({
-              address: ACTIVE_CONTRACTS.usdt,
-              abi: ERC20_ABI,
+              address:      ACTIVE_CONTRACTS.usdt,
+              abi:          ERC20_ABI,
               functionName: "approve",
-              args: [ACTIVE_CONTRACTS.ArenaManager, ENTRY],
+              args:         [ACTIVE_CONTRACTS.ArenaManager, ENTRY],
             });
             await refetchAllowance();
             setApproving(false);
           }
           await writeContractAsync({
-            address: ACTIVE_CONTRACTS.ArenaManager,
-            abi: ARENA_ABI,
+            address:      ACTIVE_CONTRACTS.ArenaManager,
+            abi:          ARENA_ABI,
             functionName: "deposit",
-            args: [],
+            args:         [],
           });
           await refetch();
-        } catch (e: any) {
-          setApproving(false);
-          setDepositErr(e.shortMessage ?? e.message ?? "Transaction failed");
-          return;
         }
       }
+    } catch (e: any) {
+      setApproving(false);
+      setDepositErr(e.shortMessage ?? e.message ?? "Transaction failed");
+      return;
     }
+
     // Save tier to localStorage
     setPlayerTier(address, selectedTier);
     setTierConfirmed(true);
@@ -1363,14 +1380,16 @@ function PlayGate({ children }: { children: React.ReactNode }) {
           {DEPOSIT_TIERS.map(t => (
             <div key={t.tier} className={`p-3 rounded-xl bg-arena-surface border ${t.color}`}>
               <div className="flex items-center justify-between mb-0.5">
-                <p className="text-white font-bold text-xs">{t.label}</p>
-                {t.badge && <span className="text-sm">{t.badge}</span>}
+                <p className="text-white font-bold text-xs">{t.label} {t.badge}</p>
               </div>
               <p className={`font-display font-black text-xl leading-none
                 ${t.tier === 4 ? "text-arena-primary" : t.tier === 3 ? "text-purple-400" : t.tier === 2 ? "text-blue-400" : "text-white/50"}`}>
                 {t.multiplier}
               </p>
-              <p className="text-arena-muted text-[9px] mt-1">{t.price}</p>
+              <p className={`text-[9px] mt-1 font-semibold
+                ${t.depositType === "contract" ? "text-arena-primary" : "text-arena-muted"}`}>
+                {t.price}
+              </p>
             </div>
           ))}
         </div>
@@ -1418,7 +1437,7 @@ function PlayGate({ children }: { children: React.ReactNode }) {
                 ${isSelected ? `${t.bg} ${t.color} ring-2 ${t.ring}` : "border-arena-border bg-arena-surface"}`}
             >
               {/* Elite badge */}
-              {t.requiresDeposit && (
+              {t.depositType === "contract" && (
                 <span className="absolute top-1.5 right-1.5 text-[7px] font-bold bg-arena-primary/20 text-arena-primary border border-arena-primary/30 px-1.5 py-0.5 rounded-full">
                   ELITE
                 </span>
@@ -1439,7 +1458,7 @@ function PlayGate({ children }: { children: React.ReactNode }) {
               <p className="text-[8px] text-arena-muted/60 uppercase tracking-wider mt-0.5">pts/win</p>
 
               <p className={`text-[10px] mt-2 font-semibold
-                ${t.requiresDeposit ? "text-arena-primary" : "text-arena-success"}`}>
+                ${t.depositType === "contract" ? "text-arena-primary" : "text-white/70"}`}>
                 {t.price}
               </p>
 
@@ -1455,7 +1474,15 @@ function PlayGate({ children }: { children: React.ReactNode }) {
 
       {/* Benefits for selected tier */}
       <div className={`p-3 rounded-2xl border ${tierCfg.color} ${tierCfg.bg} transition-all`}>
-        <p className="text-white font-semibold text-xs mb-1.5">{tierCfg.label} benefits</p>
+        <div className="flex items-center justify-between mb-1.5">
+          <p className="text-white font-semibold text-xs">{tierCfg.label} benefits</p>
+          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full
+            ${tierCfg.depositType === "contract"
+              ? "bg-arena-primary/20 text-arena-primary border border-arena-primary/30"
+              : "bg-white/10 text-white/60 border border-white/15"}`}>
+            {tierCfg.price}
+          </span>
+        </div>
         <div className="space-y-1">
           {tierCfg.benefits.map(b => (
             <p key={b} className="text-[11px] text-arena-muted flex items-center gap-1.5">
@@ -1463,13 +1490,17 @@ function PlayGate({ children }: { children: React.ReactNode }) {
             </p>
           ))}
         </div>
-        {tierCfg.requiresDeposit && (
-          <div className="mt-2 pt-2 border-t border-white/10">
+        <div className="mt-2 pt-2 border-t border-white/10">
+          {tierCfg.depositType === "direct" ? (
             <p className="text-[10px] text-arena-muted">
-              Requires <span className="text-white font-bold">1 USDT deposit</span> — earns Aave V3 yield + monthly reward eligibility
+              1 transação · USDT vai direto para o vault do protocolo
             </p>
-          </div>
-        )}
+          ) : (
+            <p className="text-[10px] text-arena-muted">
+              2 transações · USDT depositado no Aave V3 — rende yield automaticamente
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Approve → Deposit steps (Elite only) */}
@@ -1482,14 +1513,14 @@ function PlayGate({ children }: { children: React.ReactNode }) {
           </div>
           <span className="text-arena-border">→</span>
           <div className="flex-1 flex items-center gap-1.5 p-2 rounded-xl border border-arena-border bg-arena-surface text-arena-muted">
-            <span>2️⃣</span> Deposit
+            <span>2️⃣</span> Deposit to Aave
           </div>
         </div>
       )}
       {selectedTier === 4 && !!hasDeposit && (
         <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-arena-success/10 border border-arena-success/30">
           <span className="text-arena-success">✅</span>
-          <p className="text-xs text-arena-success font-medium">1 USDT deposit active — you&apos;re Elite!</p>
+          <p className="text-xs text-arena-success font-medium">1 USDT ativo no Aave V3 — você já é Elite!</p>
         </div>
       )}
 
@@ -1499,11 +1530,12 @@ function PlayGate({ children }: { children: React.ReactNode }) {
         className="w-full py-4 rounded-2xl bg-arena-primary text-arena-bg font-bold text-base disabled:opacity-50 active:scale-95 transition-transform"
         style={{ boxShadow: "0 4px 20px rgba(246,201,14,0.35)" }}
       >
-        {approving    ? "⏳ Approving USDT…"
-         : depositing ? "⏳ Depositing 1 USDT…"
-         : selectedTier === 4 && !hasDeposit && needsApproval ? "💰 Approve + Deposit 1 USDT"
-         : selectedTier === 4 && !hasDeposit ? "💰 Deposit 1 USDT"
-         : `⚔️ Enter as ${tierCfg.label}`}
+        {approving    ? "⏳ Sending USDT…"
+         : depositing ? "⏳ Depositing…"
+         : selectedTier === 4 && !hasDeposit && needsApproval ? `💰 Approve + Deposit 1 USDT`
+         : selectedTier === 4 && !hasDeposit                  ? `💰 Deposit 1 USDT (Aave V3)`
+         : selectedTier === 4                                  ? `⚔️ Enter as Elite`
+         :                                                       `💰 Send ${tierCfg.price} & Enter`}
       </button>
 
       {depositErr && (
