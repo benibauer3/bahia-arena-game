@@ -292,6 +292,53 @@ contract ArenaManager is Ownable2Step, ReentrancyGuard, Pausable {
     }
 
     /**
+     * @notice Admin migration helper — credit a player with a tier deposit.
+     *
+     *         Use-case: migrate v5 depositors to v6 without them having to act.
+     *         Owner withdraws funds from v5 (or uses treasury USDT), then calls
+     *         this function to register each player in v6 at Tier 4 (or any tier).
+     *
+     *         Caller (owner) must hold at least `tierAmount - currentDeposit[player]`
+     *         USDT and approve this contract for that amount before calling.
+     *
+     * @param player     Wallet address to credit
+     * @param tierAmount Desired tier amount (must be a valid tier: 250k/500k/750k/1M)
+     */
+    function adminCredit(address player, uint256 tierAmount)
+        external
+        onlyOwner
+        nonReentrant
+        whenNotPaused
+    {
+        if (!_isValidTierAmount(tierAmount)) revert InvalidTierAmount();
+        if (player == address(0)) revert ZeroAddress();
+
+        uint256 current = deposits[player];
+        if (tierAmount < current) revert TierDowngradeNotAllowed();
+        if (tierAmount == current && current > 0) revert AlreadyAtThisTier();
+
+        uint256 topUp   = tierAmount - current;
+        uint8   newTier = _tierLevel(tierAmount);
+        uint8   oldTier = depositTier[player];
+
+        // ── Effects ────────────────────────────────────────────────────────────
+        deposits[player]    = tierAmount;
+        depositTier[player] = newTier;
+        totalDeposits       += topUp;
+        _addToRanking(player);
+
+        // ── Interactions — pull USDT from owner ────────────────────────────────
+        usdt.safeTransferFrom(msg.sender, address(this), topUp);
+        if (_aaveEnabled()) _supplyToAave(topUp);
+
+        if (oldTier == 0) {
+            emit Deposited(player, tierAmount, newTier);
+        } else {
+            emit TierUpgraded(player, oldTier, newTier, topUp);
+        }
+    }
+
+    /**
      * @notice Reclaim the deposited principal.
      *         Cannot withdraw while in an active classic battle.
      */

@@ -162,6 +162,8 @@ export const ARENA_ABI = [
 
   // Admin
   { name: "emergencyWithdrawFromAave", type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
+  { name: "adminCredit",               type: "function", stateMutability: "nonpayable",
+    inputs: [{ name: "player", type: "address" }, { name: "tierAmount", type: "uint256" }], outputs: [] },
   { name: "pause",                     type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
   { name: "unpause",                   type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
 

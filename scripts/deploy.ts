@@ -85,7 +85,7 @@ async function main() {
   }
 
   // ── 3. Deploy ArenaManager ───────────────────────────────────────────────
-  console.log("\n[3/4] Deploying ArenaManager v6 (tiered deposits)…");
+  console.log("\n[3/4] Deploying ArenaManager v6 (tiered deposits + adminCredit migration)…");
   const treasury = deployer.address; // TODO: update to NIDO multisig after deploy
 
   const ArenaManager = await ethers.getContractFactory("ArenaManager");
