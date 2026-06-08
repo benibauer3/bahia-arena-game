@@ -9,7 +9,7 @@ export const CONTRACTS = {
   },
   celo: {
     BahiaChampion: "0x0000000000000000000000000000000000000000" as `0x${string}`,
-    ArenaManager:  "0x3e625cdF5E7A0d7Fb7eA4424323936d27C19ea58" as `0x${string}`, // deployed 2026-05-08
+    ArenaManager:  "0x43797606e23188B12F8c2DCd22B3A7a5E25f0785" as `0x${string}`, // v6 deployed 2026-06-08
     usdt:          "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e" as `0x${string}`, // USDT mainnet (6 dec)
     aavePool:      "0x3E59A31363E2ad014dcbc521c4a0d5757d9f3402" as `0x${string}`, // Aave V3 Pool on Celo
     aUsdt:         "0xdee98402a302e4d707fb9bf2bac66faeec31e8df" as `0x${string}`, // aUSDT on Celo Aave V3
@@ -57,20 +57,26 @@ const BATTLE_COMPONENTS = [
   { name: "startedAt", type: "uint64"  },
 ] as const;
 
-// ─── ArenaManager ABI (v5 — deployed at 0x3e625cdF5E7A0d7Fb7eA4424323936d27C19ea58) ─
+// ─── ArenaManager ABI (v6 — 0x43797606e23188B12F8c2DCd22B3A7a5E25f0785) ──────
 export const ARENA_ABI = [
-  // ── Constants / immutable reads ──────────────────────────────────────────
-  { name: "ENTRY_FEE",          type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { name: "WIN_POINTS",         type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { name: "LOSS_POINTS",        type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  // ── Tier + game constants ─────────────────────────────────────────────────
+  { name: "TIER1_AMOUNT",       type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "TIER2_AMOUNT",       type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "TIER3_AMOUNT",       type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "TIER4_AMOUNT",       type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "WIN_POINTS_BASE",    type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { name: "CHECKIN_POINTS",     type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { name: "CHECKIN_COOLDOWN",   type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
 
   // ── State reads ──────────────────────────────────────────────────────────
   { name: "deposits",           type: "function", stateMutability: "view", inputs: [{ name: "player", type: "address" }], outputs: [{ type: "uint256" }] },
+  { name: "depositTier",        type: "function", stateMutability: "view", inputs: [{ name: "player", type: "address" }], outputs: [{ type: "uint8"   }] },
+  { name: "hasDeposit",         type: "function", stateMutability: "view", inputs: [{ name: "player", type: "address" }], outputs: [{ type: "bool"    }] },
+  { name: "rewardEligible",     type: "function", stateMutability: "view", inputs: [{ name: "player", type: "address" }], outputs: [{ type: "bool"    }] },
+  { name: "winPointsForPlayer", type: "function", stateMutability: "view", inputs: [{ name: "player", type: "address" }], outputs: [{ type: "uint256" }] },
   { name: "totalDeposits",      type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { name: "totalYield",         type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { name: "hasDeposit",         type: "function", stateMutability: "view", inputs: [{ name: "player", type: "address" }], outputs: [{ type: "bool" }] },
+  { name: "totalPoolBalance",   type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { name: "currentMonth",       type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { name: "monthStart",         type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { name: "secondsToMonthEnd",  type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
@@ -82,16 +88,6 @@ export const ARENA_ABI = [
   { name: "monthlyPoints",      type: "function", stateMutability: "view", inputs: [{ name: "month", type: "uint256" }, { name: "player", type: "address" }], outputs: [{ type: "uint256" }] },
   { name: "playerPoints",       type: "function", stateMutability: "view", inputs: [{ name: "player", type: "address" }], outputs: [{ type: "uint256" }] },
   { name: "paused",             type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "bool" }] },
-  { name: "monthSnapshots",     type: "function", stateMutability: "view",
-    inputs: [{ name: "month", type: "uint256" }],
-    outputs: [{ name: "snap", type: "tuple", components: [
-      { name: "totalPool",      type: "uint256" },
-      { name: "yield",          type: "uint256" },
-      { name: "toPlayers",      type: "uint256" },
-      { name: "toTreasury",     type: "uint256" },
-      { name: "closed",         type: "bool"    },
-    ]}],
-  },
   { name: "challenges", type: "function", stateMutability: "view",
     inputs: [{ name: "id", type: "uint256" }],
     outputs: [{ name: "c", type: "tuple", components: [
@@ -104,83 +100,6 @@ export const ARENA_ABI = [
       { name: "createdAt",       type: "uint256" },
     ]}],
   },
-
-  // ── Writes ───────────────────────────────────────────────────────────────
-  // Deposit / Withdraw
-  { name: "deposit",            type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
-  { name: "withdraw",           type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
-
-  // Daily check-in
-  { name: "dailyCheckIn",       type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
-
-  // Named-champion battle recording (keeper/owner)
-  {
-    name: "recordBattle",
-    type: "function",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "winner",     type: "address" },
-      { name: "loser",      type: "address" },
-      { name: "champWinner", type: "string" },
-      { name: "champLoser",  type: "string" },
-    ],
-    outputs: [],
-  },
-
-  // Named-champion PvP challenges
-  { name: "createChallenge",    type: "function", stateMutability: "nonpayable",
-    inputs: [{ name: "opponent", type: "address" }, { name: "myChamp", type: "string" }],
-    outputs: [] },
-  { name: "acceptChallenge",    type: "function", stateMutability: "nonpayable",
-    inputs: [{ name: "challengeId", type: "uint256" }, { name: "myChamp", type: "string" }],
-    outputs: [] },
-  { name: "resolveChallenge",   type: "function", stateMutability: "nonpayable",
-    inputs: [{ name: "challengeId", type: "uint256" }, { name: "winner", type: "address" }],
-    outputs: [] },
-
-  // Classic on-chain battles
-  { name: "createBattle",       type: "function", stateMutability: "nonpayable", inputs: [{ name: "class_", type: "uint8" }], outputs: [{ name: "battleId", type: "uint256" }] },
-  { name: "joinBattle",         type: "function", stateMutability: "nonpayable", inputs: [{ name: "battleId", type: "uint256" }, { name: "class_", type: "uint8" }], outputs: [] },
-  { name: "resolveOnChain",     type: "function", stateMutability: "nonpayable", inputs: [{ name: "battleId", type: "uint256" }], outputs: [] },
-  { name: "resolveBattle",      type: "function", stateMutability: "nonpayable", inputs: [{ name: "battleId", type: "uint256" }, { name: "winner", type: "address" }, { name: "sig", type: "bytes" }], outputs: [] },
-  { name: "cancelBattle",       type: "function", stateMutability: "nonpayable", inputs: [{ name: "battleId", type: "uint256" }], outputs: [] },
-
-  // Legacy (no champion strings)
-  { name: "recordMatch",        type: "function", stateMutability: "nonpayable", inputs: [{ name: "winner", type: "address" }, { name: "loser", type: "address" }], outputs: [] },
-
-  // Monthly rewards
-  {
-    name: "distributeMonthlyRewards",
-    type: "function",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "topPlayers",  type: "address[]" },
-      { name: "basisPoints", type: "uint256[]" },
-    ],
-    outputs: [],
-  },
-
-  // Admin
-  { name: "emergencyWithdrawFromAave", type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
-  { name: "adminCredit",               type: "function", stateMutability: "nonpayable",
-    inputs: [{ name: "player", type: "address" }, { name: "tierAmount", type: "uint256" }], outputs: [] },
-  { name: "pause",                     type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
-  { name: "unpause",                   type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
-
-  // ── Views ─────────────────────────────────────────────────────────────────
-  {
-    name: "getBattle", type: "function", stateMutability: "view",
-    inputs: [{ name: "battleId", type: "uint256" }],
-    outputs: [{ name: "battle", type: "tuple", components: BATTLE_COMPONENTS }],
-  },
-  {
-    name: "getOpenBattles", type: "function", stateMutability: "view",
-    inputs: [{ name: "fromId", type: "uint256" }, { name: "limit", type: "uint256" }],
-    outputs: [
-      { name: "result", type: "tuple[]", components: BATTLE_COMPONENTS },
-      { name: "ids",    type: "uint256[]" },
-    ],
-  },
   {
     name: "getTopPlayers", type: "function", stateMutability: "view",
     inputs: [{ name: "n", type: "uint256" }],
@@ -189,47 +108,63 @@ export const ARENA_ABI = [
       { name: "topPts",   type: "uint256[]" },
     ],
   },
-  {
-    name: "simulateBattle", type: "function", stateMutability: "pure",
-    inputs: [
-      { name: "classA",  type: "uint8"   }, { name: "playerA", type: "address" },
-      { name: "classB",  type: "uint8"   }, { name: "playerB", type: "address" },
-      { name: "seed",    type: "uint256" },
-    ],
-    outputs: [{ name: "winner", type: "uint8" }, { name: "turns", type: "uint8" }],
-  },
-  {
-    name: "getChampionStats", type: "function", stateMutability: "pure",
-    inputs: [{ name: "class_", type: "uint8" }],
-    outputs: [{ name: "stats", type: "tuple", components: [
-      { name: "maxHp",             type: "uint16" }, { name: "attack",           type: "uint16" },
-      { name: "defense",           type: "uint16" }, { name: "speed",            type: "uint16" },
-      { name: "critBps",           type: "uint16" }, { name: "dodgeBps",         type: "uint16" },
-      { name: "abilityDamage",     type: "uint16" }, { name: "abilityHeal",      type: "uint16" },
-      { name: "dotDamagePerTurn",  type: "uint16" }, { name: "dotDurationTurns", type: "uint8"  },
-      { name: "stunDurationTurns", type: "uint8"  }, { name: "defenseBuffBps",   type: "uint16" },
+  { name: "monthSnapshots", type: "function", stateMutability: "view",
+    inputs: [{ name: "month", type: "uint256" }],
+    outputs: [{ name: "snap", type: "tuple", components: [
+      { name: "totalPool",     type: "uint256" },
+      { name: "totalPrincipal",type: "uint256" },
+      { name: "yield",         type: "uint256" },
+      { name: "toPlayers",     type: "uint256" },
+      { name: "toTreasury",    type: "uint256" },
+      { name: "activePlayers", type: "uint256" },
+      { name: "closed",        type: "bool"    },
     ]}],
   },
 
+  // ── Writes ───────────────────────────────────────────────────────────────
+  { name: "deposit",  type: "function", stateMutability: "nonpayable",
+    inputs: [{ name: "tierAmount", type: "uint256" }], outputs: [] },
+  { name: "withdraw", type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
+  { name: "adminCredit", type: "function", stateMutability: "nonpayable",
+    inputs: [{ name: "player", type: "address" }, { name: "tierAmount", type: "uint256" }], outputs: [] },
+  { name: "dailyCheckIn", type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
+  { name: "recordBattle", type: "function", stateMutability: "nonpayable",
+    inputs: [
+      { name: "winner",      type: "address" },
+      { name: "loser",       type: "address" },
+      { name: "champWinner", type: "string"  },
+      { name: "champLoser",  type: "string"  },
+    ], outputs: [] },
+  { name: "recordMatch", type: "function", stateMutability: "nonpayable",
+    inputs: [{ name: "winner", type: "address" }, { name: "loser", type: "address" }], outputs: [] },
+  { name: "createChallenge", type: "function", stateMutability: "nonpayable",
+    inputs: [{ name: "opponent", type: "address" }, { name: "myChamp", type: "string" }], outputs: [] },
+  { name: "acceptChallenge", type: "function", stateMutability: "nonpayable",
+    inputs: [{ name: "challengeId", type: "uint256" }, { name: "myChamp", type: "string" }], outputs: [] },
+  { name: "resolveChallenge", type: "function", stateMutability: "nonpayable",
+    inputs: [{ name: "challengeId", type: "uint256" }, { name: "winner", type: "address" }], outputs: [] },
+  { name: "distributeMonthlyRewards", type: "function", stateMutability: "nonpayable",
+    inputs: [{ name: "topPlayers", type: "address[]" }, { name: "basisPoints", type: "uint256[]" }], outputs: [] },
+
+  // ── Admin ─────────────────────────────────────────────────────────────────
+  { name: "emergencyWithdrawFromAave", type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
+  { name: "pause",   type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
+  { name: "unpause", type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
+
   // ── Events ────────────────────────────────────────────────────────────────
-  { name: "Deposited",         type: "event", inputs: [{ name: "player",     type: "address", indexed: true }, { name: "amount",      type: "uint256" }] },
-  { name: "Withdrawn",         type: "event", inputs: [{ name: "player",     type: "address", indexed: true }, { name: "amount",      type: "uint256" }] },
-  { name: "CheckedIn",         type: "event", inputs: [{ name: "player",     type: "address", indexed: true }, { name: "timestamp",   type: "uint256" }] },
-  { name: "BattleRecorded",    type: "event", inputs: [
-    { name: "winner",      type: "address", indexed: true },
-    { name: "loser",       type: "address", indexed: true },
-    { name: "champWinner", type: "string" },
-    { name: "champLoser",  type: "string" },
-    { name: "timestamp",   type: "uint256" },
+  { name: "Deposited",    type: "event", inputs: [{ name: "player", type: "address", indexed: true }, { name: "totalAmount", type: "uint256" }, { name: "tier", type: "uint8" }] },
+  { name: "TierUpgraded", type: "event", inputs: [{ name: "player", type: "address", indexed: true }, { name: "oldTier", type: "uint8" }, { name: "newTier", type: "uint8" }, { name: "topUp", type: "uint256" }] },
+  { name: "Withdrawn",    type: "event", inputs: [{ name: "player", type: "address", indexed: true }, { name: "amount", type: "uint256" }] },
+  { name: "CheckedIn",    type: "event", inputs: [{ name: "player", type: "address", indexed: true }, { name: "timestamp", type: "uint256" }] },
+  { name: "BattleRecorded", type: "event", inputs: [
+    { name: "winner", type: "address", indexed: true }, { name: "loser", type: "address", indexed: true },
+    { name: "champWinner", type: "string" }, { name: "champLoser", type: "string" }, { name: "timestamp", type: "uint256" },
   ]},
   { name: "ChallengeCreated",  type: "event", inputs: [{ name: "id", type: "uint256", indexed: true }, { name: "challenger", type: "address", indexed: true }, { name: "opponent", type: "address", indexed: true }] },
-  { name: "ChallengeAccepted", type: "event", inputs: [{ name: "id", type: "uint256", indexed: true }, { name: "opponent",   type: "address", indexed: true }] },
-  { name: "ChallengeResolved", type: "event", inputs: [{ name: "id", type: "uint256", indexed: true }, { name: "winner",     type: "address", indexed: true }] },
-  { name: "BattleCreated",     type: "event", inputs: [{ name: "battleId", type: "uint256", indexed: true }, { name: "playerA", type: "address", indexed: true }, { name: "classA", type: "uint8" }] },
-  { name: "BattleResolved",    type: "event", inputs: [{ name: "battleId", type: "uint256", indexed: true }, { name: "winner",  type: "address", indexed: true }, { name: "onChain", type: "bool" }] },
-  { name: "MatchRecorded",     type: "event", inputs: [{ name: "winner",  type: "address", indexed: true }, { name: "loser",   type: "address", indexed: true }, { name: "winnerPts", type: "uint256" }, { name: "loserPts", type: "uint256" }] },
-  { name: "PointsAwarded",     type: "event", inputs: [{ name: "player",  type: "address", indexed: true }, { name: "pts", type: "uint256" }, { name: "isWinner", type: "bool" }] },
+  { name: "ChallengeAccepted", type: "event", inputs: [{ name: "id", type: "uint256", indexed: true }, { name: "opponent", type: "address", indexed: true }] },
+  { name: "ChallengeResolved", type: "event", inputs: [{ name: "id", type: "uint256", indexed: true }, { name: "winner",   type: "address", indexed: true }] },
+  { name: "PointsAwarded",     type: "event", inputs: [{ name: "player", type: "address", indexed: true }, { name: "pts", type: "uint256" }, { name: "isWinner", type: "bool" }] },
   { name: "RewardsDistributed",type: "event", inputs: [{ name: "totalYield", type: "uint256" }, { name: "toPlayers", type: "uint256" }, { name: "toTreasury", type: "uint256" }] },
-  { name: "MonthClosed",       type: "event", inputs: [{ name: "month",   type: "uint256", indexed: true }, { name: "yield",     type: "uint256" }, { name: "toPlayers", type: "uint256" }, { name: "toTreasury", type: "uint256" }] },
-  { name: "PlayerRewarded",    type: "event", inputs: [{ name: "month",   type: "uint256", indexed: true }, { name: "player",    type: "address", indexed: true }, { name: "amount", type: "uint256" }, { name: "rank", type: "uint256" }] },
+  { name: "MonthClosed",       type: "event", inputs: [{ name: "month", type: "uint256", indexed: true }, { name: "yield", type: "uint256" }, { name: "toPlayers", type: "uint256" }, { name: "toTreasury", type: "uint256" }] },
+  { name: "PlayerRewarded",    type: "event", inputs: [{ name: "month", type: "uint256", indexed: true }, { name: "player", type: "address", indexed: true }, { name: "amount", type: "uint256" }, { name: "rank", type: "uint256" }] },
 ] as const;

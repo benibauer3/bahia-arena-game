@@ -17,7 +17,7 @@ const { ethers } = require("hardhat");
 // ─── Configurar aqui ──────────────────────────────────────────────────────────
 
 const V5_ADDRESS = "0x3e625cdF5E7A0d7Fb7eA4424323936d27C19ea58";
-const V6_ADDRESS = ""; // ← PREENCHER após deploy do v6
+const V6_ADDRESS = "0x43797606e23188B12F8c2DCd22B3A7a5E25f0785";
 
 // Wallets a migrar: endereço → tier desejado (1–4)
 // Tier 4 = 1 USDT → Aave V3 + reward mensal

@@ -16,7 +16,7 @@ const STATUS_COLOR: Record<number, string> = {
 };
 
 export default function BattleCard({ battleId, battle, onJoin, myAddress }: Props) {
-  const stakeFormatted = parseFloat(formatUnits(battle.stake, 18)).toFixed(2);
+  const stakeFormatted = parseFloat(formatUnits(battle.stake ?? 0n, 18)).toFixed(2);
   const isOwn          = myAddress && battle.playerA.toLowerCase() === myAddress.toLowerCase();
   const isOpen         = battle.status === 0;
 

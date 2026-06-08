@@ -1333,7 +1333,7 @@ function PlayGate({ children }: { children: React.ReactNode }) {
             address:      ACTIVE_CONTRACTS.ArenaManager,
             abi:          ARENA_ABI,
             functionName: "deposit",
-            args:         [],
+            args:         [BigInt(1_000_000)], // v6: TIER4_AMOUNT
           });
           await refetch();
         }
