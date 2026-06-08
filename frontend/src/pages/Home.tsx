@@ -176,13 +176,47 @@ export default function Home() {
         {/* Secondary CTA — Ranked mode */}
         <Link
           to="/ranked"
-          className="flex items-center justify-between px-5 py-3.5 rounded-2xl border border-arena-primary/40 bg-arena-surface active:scale-[0.98] transition-transform"
+          className="block w-full rounded-2xl overflow-hidden active:scale-[0.98] transition-transform"
+          style={{
+            background: "linear-gradient(135deg, #0f1f3d 0%, #162040 100%)",
+            border: "1px solid rgba(246,201,14,0.35)",
+            boxShadow: "0 4px 20px rgba(246,201,14,0.10)",
+          }}
         >
-          <div>
-            <p className="text-arena-primary font-bold text-sm leading-tight">🥊 Ranked Mode</p>
-            <p className="text-arena-muted text-xs mt-0.5">Deposit 1 USDT · Earn points · Monthly rewards</p>
+          <div className="px-5 py-4">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-white font-bold text-base leading-tight">🥊 Ranked Mode</p>
+                <p className="text-arena-muted text-xs mt-0.5">Compete · Earn yield · Monthly rewards</p>
+              </div>
+              <span className="text-arena-primary text-2xl font-black">→</span>
+            </div>
+
+            {/* Tier preview — 4 mini chips */}
+            <div className="grid grid-cols-4 gap-1.5">
+              {DEPOSIT_TIERS.map(t => (
+                <div
+                  key={t.tier}
+                  className="flex flex-col items-center py-2 px-1 rounded-xl"
+                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
+                >
+                  <span className={`font-black text-sm leading-none
+                    ${t.tier === 4 ? "text-arena-primary"
+                    : t.tier === 3 ? "text-purple-400"
+                    : t.tier === 2 ? "text-blue-400"
+                    : "text-white/50"}`}>
+                    {t.multiplier}
+                  </span>
+                  <span className="text-[8px] text-arena-muted mt-1 font-medium">{t.price}</span>
+                  {t.badge && <span className="text-[10px] mt-0.5">{t.badge}</span>}
+                </div>
+              ))}
+            </div>
+            <p className="text-arena-muted/50 text-[9px] mt-2 text-center">
+              4 tiers · Choose your commitment · All deposits earn yield on Aave V3
+            </p>
           </div>
-          <span className="text-arena-primary text-lg">→</span>
         </Link>
       </div>
 
