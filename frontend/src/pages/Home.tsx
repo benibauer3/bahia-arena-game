@@ -21,6 +21,7 @@ import BahiaArenaLogo                  from "@/components/BahiaArenaLogo";
 import { useViewMode }                 from "@/lib/viewModeContext";
 import { getProfile }                  from "@/lib/playerStore";
 import { DEPOSIT_TIERS }               from "@/pages/Demo";
+import MigrationBanner                 from "@/components/MigrationBanner";
 
 // ─── Champion card com arena de fundo ─────────────────────────────────────────
 
@@ -215,6 +216,9 @@ export default function Home() {
           </Link>
         </div>
       </div>
+
+      {/* ── MIGRATION BANNER (v5 → v6, auto-detect) ─────────────────────────── */}
+      {isConnected && <MigrationBanner />}
 
       {/* ── WALLET CONNECT ──────────────────────────────────────────────────── */}
       <div className="px-4 mb-4">

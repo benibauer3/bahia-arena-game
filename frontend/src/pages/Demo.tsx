@@ -25,6 +25,7 @@ import { usePlayerProfile }             from "@/hooks/usePlayerProfile";
 import { DIFF_PTS, STREAK_BONUS }       from "@/lib/playerStore";
 import { ACTIVE_CONTRACTS, ARENA_ABI, ERC20_ABI, TIER_VAULT } from "@/lib/contracts";
 import { setPlayerTier, type PlayerTier }                      from "@/lib/playerStore";
+import MigrationBanner                                         from "@/components/MigrationBanner";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1417,6 +1418,9 @@ function PlayGate({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-arena-bg flex flex-col px-4 pt-5 pb-8 gap-3.5 overflow-y-auto">
+      {/* Migration banner — shown if wallet has v5 deposit */}
+      <MigrationBanner />
+
       <div className="flex items-center gap-3">
         <BahiaArenaLogo size={32} showWordmark={false} />
         <div>

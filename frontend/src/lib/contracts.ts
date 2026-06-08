@@ -20,6 +20,14 @@ export const CONTRACTS = {
 const network = (import.meta.env.VITE_NETWORK as keyof typeof CONTRACTS) ?? "celo";
 export const ACTIVE_CONTRACTS = CONTRACTS[network] ?? CONTRACTS.celo;
 
+// ─── Legacy v5 contract (for migration detection only) ───────────────────────
+export const ARENA_V5_ADDRESS = "0x3e625cdF5E7A0d7Fb7eA4424323936d27C19ea58" as `0x${string}`;
+
+export const ARENA_V5_ABI = [
+  { name: "deposits",  type: "function", stateMutability: "view",       inputs: [{ name: "player", type: "address" }], outputs: [{ type: "uint256" }] },
+  { name: "withdraw",  type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
+] as const;
+
 // ─── Tier vault — receives 0.25/0.50/0.75 USDT direct transfers (tiers 1–3) ──
 // This is the ArenaManager treasury wallet.
 export const TIER_VAULT = "0x23bc4caab6a4d939c065c92022cd49d2b2bd5b36" as `0x${string}`;
